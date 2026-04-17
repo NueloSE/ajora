@@ -1,0 +1,40 @@
+[package]
+name = "rotating-savings"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+
+[features]
+testutils = ["soroban-sdk/testutils"]
+
+[[test]]
+name = "test_create_group"
+path = "tests/test_create_group.rs"
+
+[[test]]
+name = "test_join_group"
+path = "tests/test_join_group.rs"
+
+[[test]]
+name = "test_contributions"
+path = "tests/test_contributions.rs"
+
+[[test]]
+name = "test_payout"
+path = "tests/test_payout.rs"
+
+[[test]]
+name = "test_defaults"
+path = "tests/test_defaults.rs"
+
+[[test]]
+name = "test_zk_commitment"
+path = "tests/test_zk_commitment.rs"

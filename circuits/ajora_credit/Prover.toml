@@ -1,0 +1,13 @@
+# Test inputs for the Ajora credit circuit
+# These values satisfy: pedersen_hash([wallet_address, cycles_completed]) == group_commitment
+#
+# In production:
+#   wallet_address  = user's Stellar account ID encoded as a Field element
+#   cycles_completed = number of savings cycles the user completed
+#   group_commitment = value stored on-chain by the savings contract
+#   min_cycles       = minimum required by the new group
+
+wallet_address   = "0x0000000000000000000000000000000000000000000000000000000000000001"
+cycles_completed = "3"
+group_commitment = "2266621685630239690610425695804870191592142414591240968091852017241585808910"
+min_cycles       = "1"

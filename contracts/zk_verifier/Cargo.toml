@@ -1,0 +1,28 @@
+[package]
+name = "zk-verifier"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+
+[features]
+testutils = ["soroban-sdk/testutils"]
+
+[[test]]
+name = "test_initialization"
+path = "tests/test_initialization.rs"
+
+[[test]]
+name = "test_submit_verified_proof"
+path = "tests/test_submit_verified_proof.rs"
+
+[[test]]
+name = "test_check_credit"
+path = "tests/test_check_credit.rs"
