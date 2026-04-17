@@ -190,6 +190,7 @@ After completing a full cycle honestly:
 ### Authentication and Wallets
 
 - **Stellar Passkey Kit** — non-custodial wallet creation via WebAuthn (Face ID, fingerprint, or device PIN)
+- **Backup device support** — users can register a second phone as an on-chain co-signer via cross-device WebAuthn (QR + Bluetooth). Both devices can sign transactions independently, with no seed phrase or recovery code needed.
 - No seed phrases. No private key storage on our servers.
 
 ### ZK Layer
@@ -250,18 +251,37 @@ The MVP is scoped for execution. The architecture extends naturally to:
 
 ---
 
+## Deployed Contracts (Stellar Testnet)
+
+All contracts are live on Stellar Testnet and can be verified on [Stellar Expert](https://stellar.expert/explorer/testnet).
+
+| Contract | Address |
+| -------- | ------- |
+| Rotating Savings (ajo/esusu) | `CBJZDI7LJ3L7ZFQAP2NIIQ3Z4EHLOX27ARTMJD3LQCM3Q2VSXJAQ65D7` |
+| Target Savings | `CDJX3LE5XFAGTA7KOF2OKGYQDOCNCWY2S6KHW7B36O6YCPFCK7ZRZI6S` |
+| ZK Credit Verifier | `CCYOYAMU2WFPKDVQUT5ZYYHF45IRBOEIDR3SJZVBSVTXBMUOWCRCFLDZ` |
+
+Network: `Test SDF Network ; September 2015`  
+RPC: `https://soroban-testnet.stellar.org`
+
+---
+
 ## MVP Scope (Hackathon Build)
 
-| Feature                                                 | Status                      |
-| ------------------------------------------------------- | --------------------------- |
-| Soroban smart contract (group logic)                    | In scope                    |
-| Passkey onboarding (non-custodial wallet)               | In scope                    |
-| Contributions in testnet USDC (displayed as Naira/Cedi) | In scope                    |
-| Automated payout logic                                  | In scope                    |
-| Default detection and on-chain flagging                 | In scope                    |
-| AI agent (reminders + payout trigger)                   | In scope                    |
-| ZK proof of contribution history                        | In scope (simplified proof) |
-| Group dashboard UI                                      | In scope                    |
+| Feature                                                 | Status |
+| ------------------------------------------------------- | ------ |
+| Soroban smart contract — rotating savings (ajo/esusu)   | ✅ Built & deployed |
+| Soroban smart contract — target savings pool            | ✅ Built & deployed |
+| Soroban smart contract — ZK credit verifier             | ✅ Built & deployed |
+| Passkey onboarding (non-custodial, no seed phrase)      | ✅ Built |
+| Backup device — add second phone as co-signer on-chain  | ✅ Built |
+| Contributions in testnet USDC                           | ✅ Built |
+| Send USDC between wallets (biometric-signed)            | ✅ Built |
+| Automated payout logic                                  | ✅ Built |
+| Default detection and on-chain flagging                 | ✅ Built |
+| ZK proof of contribution history                        | ✅ Built (Noir circuit) |
+| Group dashboard UI (mobile-first)                       | ✅ Built |
+| AI agent (reminders + payout trigger)                   | In scope |
 
 ---
 
