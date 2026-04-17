@@ -1,0 +1,213 @@
+@import "tailwindcss";
+
+:root {
+  --green: #0B3D2E;
+  --green-mid: #155C44;
+  --green-light: #1E7A5A;
+  --amber: #E8970A;
+  --amber-light: #F5B030;
+  --amber-dim: #C47D08;
+  --bg: #F7F4EF;
+  --surface: #FFFFFF;
+  --ink: #0B1612;
+  --ink-soft: #4A6358;
+  --ink-muted: #8AA396;
+  --border: #D9E8E2;
+}
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--ink);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* Pulse animation for live indicators */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+.animate-slide-up { animation: slide-up 0.4s ease forwards; }
+.animate-fade-in  { animation: fade-in  0.3s ease forwards; }
+
+.pulse-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--amber);
+  animation: pulse-dot 1.8s ease-in-out infinite;
+}
+
+/* Progress bar */
+.progress-bar {
+  height: 6px;
+  border-radius: 99px;
+  background: var(--border);
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--green-light), var(--amber));
+  transition: width 0.6s ease;
+}
+
+/* ─── Responsive dashboard layout ─── */
+
+.dashboard-root {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar: sticky column on desktop, fixed off-canvas drawer on mobile */
+.sidebar-root {
+  width: 240px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+/* Mobile top bar — hidden on desktop, shown on mobile */
+.mobile-topbar {
+  display: none;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--green);
+  padding: 0 16px;
+  height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+/* Sidebar backdrop overlay — hidden until sidebar is open on mobile */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(11,22,18,0.55);
+  backdrop-filter: blur(2px);
+  z-index: 190;
+}
+
+/* Close button inside sidebar — only visible on mobile */
+.sidebar-close-btn {
+  display: none;
+}
+
+/* Responsive page padding */
+.page-pad {
+  padding: 40px 48px;
+  max-width: 940px;
+  margin: 0 auto;
+}
+
+/* Stat card grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 40px;
+}
+
+/* ─── Mobile breakpoint ─── */
+@media (max-width: 768px) {
+  /* Sidebar slides in from left as an overlay */
+  .sidebar-root {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    width: 280px !important;
+    height: 100vh !important;
+    z-index: 200 !important;
+    transform: translateX(-100%) !important;
+    transition: transform 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    overflow-y: auto !important;
+  }
+  .sidebar-root.sidebar-open {
+    transform: translateX(0) !important;
+    box-shadow: 6px 0 32px rgba(0,0,0,0.35);
+  }
+
+  /* Overlay appears when sidebar is open */
+  .sidebar-overlay.sidebar-overlay-open {
+    display: block;
+  }
+
+  /* Mobile topbar becomes visible */
+  .mobile-topbar {
+    display: flex;
+  }
+
+  /* Close button shows inside the drawer */
+  .sidebar-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.7);
+    font-size: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+
+  /* Tighten page padding on mobile */
+  .page-pad {
+    padding: 20px 16px;
+    max-width: 100%;
+  }
+
+  /* Stat grid: 2-col on mobile */
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+}
+
+/* Very small screens: single-col stats */
+@media (max-width: 380px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
