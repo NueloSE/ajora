@@ -105,19 +105,36 @@ export interface OnChainPool {
   token: string;
 }
 
-function parseStatus(raw: unknown, numericMap?: Record<number, string>): string {
-  if (typeof raw === "string") return raw;
-  // Soroban enum returned as numeric discriminant (u32)
-  if (typeof raw === "number" && numericMap) return numericMap[raw] ?? "Unknown";
-  if (typeof raw === "bigint" && numericMap) return numericMap[Number(raw)] ?? "Unknown";
-  if (raw && typeof raw === "object" && "tag" in (raw as Record<string, unknown>)) {
-    return (raw as { tag: string }).tag;
-  }
-  return "Unknown";
-}
-
+const KNOWN_STATUSES = ["Forming", "Active", "Completed", "Matured", "Cancelled"];
 const GROUP_STATUS_MAP: Record<number, string> = { 0: "Forming", 1: "Active", 2: "Completed", 3: "Cancelled" };
 const POOL_STATUS_MAP:  Record<number, string> = { 0: "Forming", 1: "Active", 2: "Matured",   3: "Cancelled" };
+
+function parseStatus(raw: unknown, numericMap?: Record<number, string>): string {
+  // Plain string: "Forming"
+  if (typeof raw === "string") return raw;
+  // Numeric discriminant: 0, 1, 2 ...
+  if (typeof raw === "number" && numericMap) return numericMap[raw] ?? "Unknown";
+  if (typeof raw === "bigint" && numericMap) return numericMap[Number(raw)] ?? "Unknown";
+
+  if (raw && typeof raw === "object") {
+    // Array format: ["Forming"] or ["Forming", undefined]
+    if (Array.isArray(raw)) {
+      if (typeof raw[0] === "string") return raw[0];
+    } else {
+      const obj = raw as Record<string, unknown>;
+      // { tag: "Forming" } — passkey-kit / SDK wrapper style
+      if (typeof obj.tag === "string") return obj.tag;
+      // { Forming: undefined } or { Forming: null } — scvMap with variant name as key
+      const keys = Object.keys(obj);
+      if (keys.length === 1) return keys[0];
+      // Multiple keys — pick the first known status name
+      for (const k of keys) if (KNOWN_STATUSES.includes(k)) return k;
+    }
+  }
+
+  console.warn("[parseStatus] unrecognised status format:", JSON.stringify(raw));
+  return "Unknown";
+}
 
 // ---------------------------------------------------------------------------
 // Rotating savings reads
