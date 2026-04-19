@@ -6,10 +6,12 @@ import Link from "next/link";
 import { fetchAllGroups, fetchUsdcBalance, hasZkProofOnChain, type OnChainGroup, stroopsToUsdc, REPUTATION_ID } from "@/lib/soroban";
 import { createGroup, joinGroup, contribute } from "@/lib/contracts";
 import { useWallet } from "@/context/WalletContext";
+import { saveGroupName as saveGroupNameRemote, fetchGroupNames } from "@/lib/registry";
 
 const STELLAR_EXPLORER = "https://stellar.expert/explorer/testnet/tx";
 
 type Filter = "all" | "active" | "forming";
+
 
 function statusTag(s: string): string {
   switch (s) {
@@ -36,6 +38,8 @@ export default function GroupsPage() {
   const [txError,     setTxError]     = useState<string | null>(null);
   const [submitting,  setSubmitting]  = useState(false);
 
+  const [groupNames, setGroupNames] = useState<Record<number, string>>({});
+
   const [form, setForm] = useState({
     name: "", amount: "10", members: "4", cycleDays: "30", minScore: "0",
   });
@@ -53,6 +57,7 @@ export default function GroupsPage() {
   }, []);
 
   useEffect(() => { loadGroups(); }, [loadGroups]);
+  useEffect(() => { fetchGroupNames().then(setGroupNames).catch(() => {}); }, []);
 
   // Auto-open join modal when ?join=X is in the URL (from a share link)
   useEffect(() => {
@@ -93,7 +98,17 @@ export default function GroupsPage() {
       );
       setTxHash(hash);
       setShowCreate(false);
-      await loadGroups();
+      const refreshed = await fetchAllGroups();
+      setGroups(refreshed);
+      setLoading(false);
+      // Save name to Supabase so all users see it
+      if (form.name.trim()) {
+        const newId = refreshed.length > 0 ? refreshed[refreshed.length - 1].id : 1;
+        await saveGroupNameRemote(newId, form.name.trim());
+        const updatedNames = await fetchGroupNames();
+        setGroupNames(updatedNames);
+        setForm(f => ({ ...f, name: "" }));
+      }
     } catch (e) {
       setTxError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -257,6 +272,7 @@ export default function GroupsPage() {
             <GroupCard
               key={g.id}
               group={g}
+              groupName={groupNames[g.id] ?? null}
               myAddress={address}
               onJoin={() => openJoinModal(g)}
               onContribute={() => handleContribute(g.id, g.contribution_amount)}
@@ -541,8 +557,9 @@ export default function GroupsPage() {
   );
 }
 
-function GroupCard({ group, myAddress, onJoin, onContribute }: {
+function GroupCard({ group, groupName, myAddress, onJoin, onContribute }: {
   group: OnChainGroup;
+  groupName: string | null;
   myAddress: string | null;
   onJoin: () => void;
   onContribute: () => void;
@@ -585,8 +602,13 @@ function GroupCard({ group, myAddress, onJoin, onContribute }: {
         <div style={{ flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <span style={{ fontSize: 17, fontWeight: 800, color: "var(--ink)", letterSpacing: "-0.3px" }}>
-              Group #{group.id}
+              {groupName ?? `Group #${group.id}`}
             </span>
+            {groupName && (
+              <span style={{ fontSize: 11, color: "var(--ink-muted)", fontWeight: 500 }}>
+                #{group.id}
+              </span>
+            )}
             <span style={{
               background: group.status === "Active"
                 ? "rgba(11,61,46,0.1)" : "rgba(74,99,88,0.1)",

@@ -105,13 +105,19 @@ export interface OnChainPool {
   token: string;
 }
 
-function parseStatus(raw: unknown): string {
+function parseStatus(raw: unknown, numericMap?: Record<number, string>): string {
   if (typeof raw === "string") return raw;
+  // Soroban enum returned as numeric discriminant (u32)
+  if (typeof raw === "number" && numericMap) return numericMap[raw] ?? "Unknown";
+  if (typeof raw === "bigint" && numericMap) return numericMap[Number(raw)] ?? "Unknown";
   if (raw && typeof raw === "object" && "tag" in (raw as Record<string, unknown>)) {
     return (raw as { tag: string }).tag;
   }
   return "Unknown";
 }
+
+const GROUP_STATUS_MAP: Record<number, string> = { 0: "Forming", 1: "Active", 2: "Completed", 3: "Cancelled" };
+const POOL_STATUS_MAP:  Record<number, string> = { 0: "Forming", 1: "Active", 2: "Matured",   3: "Cancelled" };
 
 // ---------------------------------------------------------------------------
 // Rotating savings reads
@@ -132,7 +138,7 @@ export async function fetchGroup(groupId: number): Promise<OnChainGroup | null> 
     current_cycle:          Number(g.current_cycle ?? 0),
     total_cycles:           Number(g.total_cycles ?? 0),
     cycle_start_ledger:     Number(g.cycle_start_ledger ?? 0),
-    status:                 parseStatus(g.status) as GroupStatusTag,
+    status:                 parseStatus(g.status, GROUP_STATUS_MAP) as GroupStatusTag,
     token:                  String(g.token ?? ""),
   };
 }
@@ -176,7 +182,7 @@ export async function fetchPool(poolId: number): Promise<OnChainPool | null> {
     total_cycles:           Number(p.total_cycles ?? 0),
     current_cycle:          Number(p.current_cycle ?? 0),
     cycle_start_ledger:     Number(p.cycle_start_ledger ?? 0),
-    status:                 parseStatus(p.status) as PoolStatusTag,
+    status:                 parseStatus(p.status, POOL_STATUS_MAP) as PoolStatusTag,
     token:                  String(p.token ?? ""),
   };
 }

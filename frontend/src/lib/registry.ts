@@ -97,3 +97,26 @@ export async function recoverByKeyId(keyId: string): Promise<RegistryUser | null
     name:       data.name,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Group names — shared across all users via Supabase
+// ---------------------------------------------------------------------------
+
+export async function saveGroupName(groupId: number, name: string): Promise<void> {
+  if (!SUPABASE_URL) return;
+  const { error } = await supabase
+    .from("group_names")
+    .upsert({ group_id: groupId, name }, { onConflict: "group_id" });
+  if (error) console.warn("Group name save failed:", error.message);
+}
+
+export async function fetchGroupNames(): Promise<Record<number, string>> {
+  if (!SUPABASE_URL) return {};
+  const { data, error } = await supabase
+    .from("group_names")
+    .select("group_id, name");
+  if (error || !data) return {};
+  const map: Record<number, string> = {};
+  for (const row of data) map[row.group_id] = row.name;
+  return map;
+}
