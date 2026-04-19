@@ -338,6 +338,8 @@ A modest reach of 50,000 active group cycles per month — at an average pool of
 - **Micro-lending layer** — borrow against your ajo credit history
 - **Cross-border groups** — Nigerian, Ghanaian, and diaspora members in one group
 - **DAO governance** — group rules set and voted on by members
+- **Phone number registry** — on-chain registry contract that maps hashed phone numbers to wallet addresses, enforcing uniqueness at registration without exposing the number on-chain; currently phone is a display label only and two users can register with the same number
+- **SMS OTP verification** — stateless OTP relay (e.g. Twilio) that proves a user owns the phone number they register with; combined with the on-chain registry this gives full identity binding with no custodial server
 
 ---
 

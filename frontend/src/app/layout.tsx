@@ -5,6 +5,9 @@ import { WalletProvider } from "@/context/WalletContext";
 export const metadata: Metadata = {
   title: "Ajora — Trustless Rotating Savings",
   description: "Save together, trustlessly. Rotating and target savings on Stellar.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

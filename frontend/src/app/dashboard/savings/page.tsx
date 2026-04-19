@@ -689,7 +689,13 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
       background: "var(--surface)", border: "1px solid var(--border)",
       borderRadius: 20,
     }}>
-      <div style={{ fontSize: 36, marginBottom: 16, opacity: 0.3 }}>◎</div>
+      <div style={{ marginBottom: 16, display: "flex", justifyContent: "center", opacity: 0.3, color: "var(--ink-muted)" }}>
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5"/>
+          <circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="1.5"/>
+          <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+        </svg>
+      </div>
       <div style={{ fontSize: 17, fontWeight: 700, color: "var(--ink)", marginBottom: 8 }}>
         No savings pools yet
       </div>

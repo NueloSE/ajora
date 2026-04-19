@@ -53,9 +53,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               borderRadius: 8,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
-              <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-                <path d="M10 2L17 6V14L10 18L3 14V6L10 2Z" stroke="#E8970A" strokeWidth="1.5" fill="none"/>
-                <path d="M10 7L14 9.5V14.5L10 17L6 14.5V9.5L10 7Z" fill="#E8970A" opacity="0.35"/>
+              <svg width="18" height="18" viewBox="0 0 48 48" fill="none">
+                <circle cx="24" cy="10.5" r="3.5" fill="#E8970A" />
+                <path d="M19.5 18.5 Q24 15 28.5 18.5 L29.5 24 H18.5 Z" fill="#E8970A" />
+                <circle cx="35" cy="28.5" r="3.5" fill="#E8970A" opacity="0.55" />
+                <path d="M30.5 36.5 Q35 33 39.5 36.5 L40.5 42 H29.5 Z" fill="#E8970A" opacity="0.55" />
+                <circle cx="13" cy="28.5" r="3.5" fill="#E8970A" opacity="0.3" />
+                <path d="M8.5 36.5 Q13 33 17.5 36.5 L18.5 42 H7.5 Z" fill="#E8970A" opacity="0.3" />
+                <path d="M22.5 14 Q28 21 32 25.5" stroke="#E8970A" strokeWidth="1" fill="none" strokeDasharray="2.5 2" opacity="0.35" />
+                <path d="M25.5 14 Q20 21 16 25.5" stroke="#E8970A" strokeWidth="1" fill="none" strokeDasharray="2.5 2" opacity="0.35" />
               </svg>
             </div>
             <span style={{ fontWeight: 800, fontSize: 16, color: "#fff", letterSpacing: "-0.4px" }}>

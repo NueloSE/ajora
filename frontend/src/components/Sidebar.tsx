@@ -8,11 +8,42 @@ import { fetchUsdcBalance, stroopsToUsdc } from "@/lib/soroban";
 import { transferUsdc } from "@/lib/contracts";
 
 const NAV = [
-  { href: "/dashboard",          label: "Overview",         icon: "⬡" },
-  { href: "/dashboard/groups",   label: "Rotating Savings", icon: "⟳" },
-  { href: "/dashboard/savings",  label: "Target Savings",   icon: "◎" },
-  { href: "/dashboard/proof",    label: "ZK Credit Proof",  icon: "◈" },
-  { href: "/dashboard/backup",   label: "Backup Device",    icon: "⊕" },
+  { href: "/dashboard", label: "Overview", icon: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+      <rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
+      <rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
+      <rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
+      <rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
+    </svg>
+  )},
+  { href: "/dashboard/groups", label: "Rotating Savings", icon: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+      <path d="M4 12a8 8 0 018-8 8 8 0 016 2.67" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+      <path d="M20 12a8 8 0 01-8 8 8 8 0 01-6-2.67" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+      <path d="M18 6.5V3.5h-3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M6 17.5v3h3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )},
+  { href: "/dashboard/savings", label: "Target Savings", icon: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8"/>
+      <circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="1.8"/>
+      <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+    </svg>
+  )},
+  { href: "/dashboard/proof", label: "ZK Credit Proof", icon: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+      <path d="M12 3L4 7v5c0 4.55 3.4 8.81 8 9.93C16.6 20.81 20 16.55 20 12V7L12 3z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+      <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )},
+  { href: "/dashboard/backup", label: "Backup Device", icon: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+      <rect x="7" y="2" width="10" height="20" rx="2" stroke="currentColor" strokeWidth="1.8"/>
+      <circle cx="12" cy="18.5" r="1" fill="currentColor"/>
+      <line x1="10" y1="6" x2="14" y2="6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  )},
 ];
 
 const STELLAR_EXPLORER = "https://stellar.expert/explorer/testnet/tx";
@@ -138,9 +169,15 @@ export default function Sidebar({
                 borderRadius: 10,
                 display: "flex", alignItems: "center", justifyContent: "center",
               }}>
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                  <path d="M10 2L17 6V14L10 18L3 14V6L10 2Z" stroke="#E8970A" strokeWidth="1.5" fill="none"/>
-                  <path d="M10 7L14 9.5V14.5L10 17L6 14.5V9.5L10 7Z" fill="#E8970A" opacity="0.35"/>
+                <svg width="22" height="22" viewBox="0 0 48 48" fill="none">
+                  <circle cx="24" cy="10.5" r="3.5" fill="#E8970A" />
+                  <path d="M19.5 18.5 Q24 15 28.5 18.5 L29.5 24 H18.5 Z" fill="#E8970A" />
+                  <circle cx="35" cy="28.5" r="3.5" fill="#E8970A" opacity="0.55" />
+                  <path d="M30.5 36.5 Q35 33 39.5 36.5 L40.5 42 H29.5 Z" fill="#E8970A" opacity="0.55" />
+                  <circle cx="13" cy="28.5" r="3.5" fill="#E8970A" opacity="0.3" />
+                  <path d="M8.5 36.5 Q13 33 17.5 36.5 L18.5 42 H7.5 Z" fill="#E8970A" opacity="0.3" />
+                  <path d="M22.5 14 Q28 21 32 25.5" stroke="#E8970A" strokeWidth="1" fill="none" strokeDasharray="2.5 2" opacity="0.35" />
+                  <path d="M25.5 14 Q20 21 16 25.5" stroke="#E8970A" strokeWidth="1" fill="none" strokeDasharray="2.5 2" opacity="0.35" />
                 </svg>
               </div>
               <span style={{ fontWeight: 800, fontSize: 17, color: "#fff", letterSpacing: "-0.4px" }}>Ajora</span>
@@ -314,7 +351,11 @@ export default function Sidebar({
                 border: active ? "1px solid rgba(232,151,10,0.25)" : "1px solid transparent",
                 transition: "all 0.15s",
               }}>
-                <span style={{ fontSize: 15, color: active ? "var(--amber)" : "rgba(255,255,255,0.45)" }}>
+                <span style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 18, height: 18, flexShrink: 0,
+                  color: active ? "var(--amber)" : "rgba(255,255,255,0.45)",
+                }}>
                   {icon}
                 </span>
                 <span style={{

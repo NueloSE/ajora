@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   fetchAllGroups, fetchAllPools, fetchUsdcBalance, fetchReputationData,
@@ -206,7 +206,7 @@ export default function DashboardHome() {
           <LoadingSkeleton />
         ) : groups.length === 0 ? (
           <EmptyCard
-            icon="⟳"
+            icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 018-8 8 8 0 016 2.67" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><path d="M20 12a8 8 0 01-8 8 8 8 0 01-6-2.67" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><path d="M18 6.5V3.5h-3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><path d="M6 17.5v3h3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>}
             msg="No rotating groups yet"
             sub="Create the first group on Stellar"
             href="/dashboard/groups"
@@ -227,7 +227,7 @@ export default function DashboardHome() {
           <LoadingSkeleton />
         ) : pools.length === 0 ? (
           <EmptyCard
-            icon="◎"
+            icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6"/><circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="1.6"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>}
             msg="No savings pools yet"
             sub="Create a target savings pool"
             href="/dashboard/savings"
@@ -724,7 +724,7 @@ function LoadingSkeleton() {
 }
 
 function EmptyCard({ icon, msg, sub, href }: {
-  icon: string; msg: string; sub: string; href: string;
+  icon: React.ReactNode; msg: string; sub: string; href: string;
 }) {
   return (
     <div style={{
@@ -734,7 +734,7 @@ function EmptyCard({ icon, msg, sub, href }: {
       gap: 16, flexWrap: "wrap",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <span style={{ fontSize: 22, opacity: 0.3 }}>{icon}</span>
+        <span style={{ display: "flex", opacity: 0.35, color: "var(--ink-muted)" }}>{icon}</span>
         <div>
           <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-soft)" }}>{msg}</div>
           <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>{sub}</div>

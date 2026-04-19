@@ -45,6 +45,7 @@ function useLiveStats() {
 }
 
 function Logo({ size = 36 }: { size?: number }) {
+  const iconSize = size * 0.72;
   return (
     <div style={{
       width: size, height: size,
@@ -53,9 +54,15 @@ function Logo({ size = 36 }: { size?: number }) {
       display: "flex", alignItems: "center", justifyContent: "center",
       flexShrink: 0,
     }}>
-      <svg width={size * 0.55} height={size * 0.55} viewBox="0 0 20 20" fill="none">
-        <path d="M10 2L17 6V14L10 18L3 14V6L10 2Z" stroke="#E8970A" strokeWidth="1.5" fill="none"/>
-        <path d="M10 7L14 9.5V14.5L10 17L6 14.5V9.5L10 7Z" fill="#E8970A" opacity="0.35"/>
+      <svg width={iconSize} height={iconSize} viewBox="0 0 48 48" fill="none">
+        <circle cx="24" cy="10.5" r="3.5" fill="#E8970A" />
+        <path d="M19.5 18.5 Q24 15 28.5 18.5 L29.5 24 H18.5 Z" fill="#E8970A" />
+        <circle cx="35" cy="28.5" r="3.5" fill="#E8970A" opacity="0.55" />
+        <path d="M30.5 36.5 Q35 33 39.5 36.5 L40.5 42 H29.5 Z" fill="#E8970A" opacity="0.55" />
+        <circle cx="13" cy="28.5" r="3.5" fill="#E8970A" opacity="0.3" />
+        <path d="M8.5 36.5 Q13 33 17.5 36.5 L18.5 42 H7.5 Z" fill="#E8970A" opacity="0.3" />
+        <path d="M22.5 14 Q28 21 32 25.5" stroke="#E8970A" strokeWidth="1" fill="none" strokeDasharray="2.5 2" opacity="0.35" />
+        <path d="M25.5 14 Q20 21 16 25.5" stroke="#E8970A" strokeWidth="1" fill="none" strokeDasharray="2.5 2" opacity="0.35" />
       </svg>
     </div>
   );
@@ -284,9 +291,13 @@ export default function Landing() {
               <div style={{
                 width: 64, height: 64, borderRadius: 20, margin: "0 auto",
                 background: "rgba(232,151,10,0.18)", border: "2px solid rgba(232,151,10,0.3)",
-                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28,
+                display: "flex", alignItems: "center", justifyContent: "center",
               }}>
-                🔐
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                  <rect x="5" y="11" width="14" height="10" rx="2" stroke="#E8970A" strokeWidth="1.8"/>
+                  <path d="M8 11V7a4 4 0 018 0v4" stroke="#E8970A" strokeWidth="1.8" strokeLinecap="round"/>
+                  <circle cx="12" cy="16" r="1.5" fill="#E8970A"/>
+                </svg>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -295,7 +306,12 @@ export default function Landing() {
                 borderRadius: 12, padding: "14px 18px",
                 display: "flex", alignItems: "center", gap: 14,
               }}>
-                <span style={{ fontSize: 24 }}>☝️</span>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <path d="M9 11V6a3 3 0 016 0v5" stroke="rgba(255,255,255,0.8)" strokeWidth="1.5" strokeLinecap="round"/>
+                  <path d="M6.5 12.5V9a5.5 5.5 0 0111 0v3.5" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" strokeLinecap="round"/>
+                  <path d="M12 11v8" stroke="rgba(255,255,255,0.8)" strokeWidth="1.5" strokeLinecap="round"/>
+                  <path d="M4 15.5V11a8 8 0 0116 0v4.5" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
                 <div>
                   <div style={{ color: "#fff", fontSize: 13, fontWeight: 600 }}>Use biometrics</div>
                   <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, marginTop: 2 }}>Touch ID or Face ID</div>

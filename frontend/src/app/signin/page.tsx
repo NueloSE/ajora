@@ -146,9 +146,15 @@ export default function SignInPage() {
             background: "var(--green)", borderRadius: 16,
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            <svg width="26" height="26" viewBox="0 0 20 20" fill="none">
-              <path d="M10 2L17 6V14L10 18L3 14V6L10 2Z" stroke="#E8970A" strokeWidth="1.5" fill="none"/>
-              <path d="M10 7L14 9.5V14.5L10 17L6 14.5V9.5L10 7Z" fill="#E8970A" opacity="0.5"/>
+            <svg width="34" height="34" viewBox="0 0 48 48" fill="none">
+              <circle cx="24" cy="10.5" r="3.5" fill="#E8970A" />
+              <path d="M19.5 18.5 Q24 15 28.5 18.5 L29.5 24 H18.5 Z" fill="#E8970A" />
+              <circle cx="35" cy="28.5" r="3.5" fill="#E8970A" opacity="0.55" />
+              <path d="M30.5 36.5 Q35 33 39.5 36.5 L40.5 42 H29.5 Z" fill="#E8970A" opacity="0.55" />
+              <circle cx="13" cy="28.5" r="3.5" fill="#E8970A" opacity="0.3" />
+              <path d="M8.5 36.5 Q13 33 17.5 36.5 L18.5 42 H7.5 Z" fill="#E8970A" opacity="0.3" />
+              <path d="M22.5 14 Q28 21 32 25.5" stroke="#E8970A" strokeWidth="1" fill="none" strokeDasharray="2.5 2" opacity="0.35" />
+              <path d="M25.5 14 Q20 21 16 25.5" stroke="#E8970A" strokeWidth="1" fill="none" strokeDasharray="2.5 2" opacity="0.35" />
             </svg>
           </div>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--ink)", letterSpacing: "-0.5px", marginBottom: 6 }}>
@@ -194,8 +200,11 @@ export default function SignInPage() {
                 <div style={{ marginBottom: 18 }}>
                   <label style={labelStyle}>Your name</label>
                   <div style={{ position: "relative" }}>
-                    <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 16 }}>
-                      👤
+                    <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", display: "flex", color: "var(--ink-muted)" }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="1.5"/>
+                        <path d="M4 20c0-3.314 3.582-6 8-6s8 2.686 8 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                      </svg>
                     </span>
                     <input
                       type="text"
@@ -213,8 +222,12 @@ export default function SignInPage() {
               <div style={{ marginBottom: 24 }}>
                 <label style={labelStyle}>Phone number</label>
                 <div style={{ position: "relative" }}>
-                  <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 16 }}>
-                    📱
+                  <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", display: "flex", color: "var(--ink-muted)" }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                      <rect x="7" y="2" width="10" height="20" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+                      <circle cx="12" cy="18.5" r="1" fill="currentColor"/>
+                      <line x1="10" y1="6" x2="14" y2="6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                    </svg>
                   </span>
                   <input
                     type="tel"
@@ -262,7 +275,18 @@ export default function SignInPage() {
                   <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
                     <path d="M6 14L11 19L22 8" stroke="var(--green)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
-                ) : loading ? "⏳" : "🔒"}
+                ) : loading ? (
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="9" stroke="var(--green)" strokeWidth="2" opacity="0.2"/>
+                    <path d="M12 3a9 9 0 019 9" stroke="var(--green)" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                ) : (
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                    <rect x="5" y="11" width="14" height="10" rx="2" stroke="var(--green)" strokeWidth="1.8"/>
+                    <path d="M8 11V7a4 4 0 018 0v4" stroke="var(--green)" strokeWidth="1.8" strokeLinecap="round"/>
+                    <circle cx="12" cy="16" r="1.5" fill="var(--green)"/>
+                  </svg>
+                )}
               </div>
 
               <h2 style={{ fontSize: 18, fontWeight: 800, color: "var(--ink)", letterSpacing: "-0.3px", marginBottom: 8 }}>
@@ -396,12 +420,27 @@ export default function SignInPage() {
         {step === "phone" && (
           <div style={{ display: "flex", justifyContent: "center", gap: 24, marginTop: 28, flexWrap: "wrap" }}>
             {[
-              { icon: "🔐", label: "No seed phrase" },
-              { icon: "📵", label: "Not stored on servers" },
-              { icon: "🔑", label: "Your device, your key" },
+              { icon: (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                  <rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.8"/>
+                  <path d="M8 11V7a4 4 0 018 0v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                </svg>
+              ), label: "No seed phrase" },
+              { icon: (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 3L4 7v5c0 4.55 3.4 8.81 8 9.93C16.6 20.81 20 16.55 20 12V7L12 3z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                  <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              ), label: "Not stored on servers" },
+              { icon: (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                  <circle cx="8" cy="12" r="4" stroke="currentColor" strokeWidth="1.8"/>
+                  <path d="M12 12h9M17 12v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                </svg>
+              ), label: "Your device, your key" },
             ].map(b => (
               <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 14 }}>{b.icon}</span>
+                <span style={{ display: "flex", color: "var(--ink-muted)" }}>{b.icon}</span>
                 <span style={{ fontSize: 12, color: "var(--ink-muted)" }}>{b.label}</span>
               </div>
             ))}

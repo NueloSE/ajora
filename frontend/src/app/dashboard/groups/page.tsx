@@ -739,7 +739,14 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
       background: "var(--surface)", border: "1px solid var(--border)",
       borderRadius: 20,
     }}>
-      <div style={{ fontSize: 36, marginBottom: 16, opacity: 0.3 }}>⟳</div>
+      <div style={{ marginBottom: 16, display: "flex", justifyContent: "center", opacity: 0.3, color: "var(--ink-muted)" }}>
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+          <path d="M4 12a8 8 0 018-8 8 8 0 016 2.67" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          <path d="M20 12a8 8 0 01-8 8 8 8 0 01-6-2.67" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          <path d="M18 6.5V3.5h-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M6 17.5v3h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </div>
       <div style={{ fontSize: 17, fontWeight: 700, color: "var(--ink)", marginBottom: 8 }}>
         No groups yet on Stellar
       </div>

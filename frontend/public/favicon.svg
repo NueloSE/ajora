@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <!-- Green background square with rounded corners -->
+  <rect width="48" height="48" rx="11" fill="#0b3d2e"/>
+
+  <!-- Person 1 — top, full brightness -->
+  <circle cx="24" cy="10.5" r="3.5" fill="#E8970A"/>
+  <path d="M19.5 18.5 Q24 15 28.5 18.5 L29.5 24 H18.5 Z" fill="#E8970A"/>
+
+  <!-- Person 2 — bottom-right, medium -->
+  <circle cx="35" cy="28.5" r="3.5" fill="#E8970A" opacity="0.6"/>
+  <path d="M30.5 36.5 Q35 33 39.5 36.5 L40.5 42 H29.5 Z" fill="#E8970A" opacity="0.6"/>
+
+  <!-- Person 3 — bottom-left, dim -->
+  <circle cx="13" cy="28.5" r="3.5" fill="#E8970A" opacity="0.35"/>
+  <path d="M8.5 36.5 Q13 33 17.5 36.5 L18.5 42 H7.5 Z" fill="#E8970A" opacity="0.35"/>
+
+  <!-- Connecting arcs -->
+  <path d="M22.5 14 Q28 21 32 25.5" stroke="#E8970A" stroke-width="1" fill="none" stroke-dasharray="2.5 2" opacity="0.4"/>
+  <path d="M25.5 14 Q20 21 16 25.5" stroke="#E8970A" stroke-width="1" fill="none" stroke-dasharray="2.5 2" opacity="0.4"/>
+</svg>
