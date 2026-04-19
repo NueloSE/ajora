@@ -202,6 +202,18 @@ export async function registerWithPasskey(phone: string, name: string): Promise<
 
   const session: AjoraSession = { phone, name, contractId, keyIdBase64, signedOut: false };
   writeRecord(session);
+
+  // 5. Save to Supabase registry so the session can be recovered if
+  //    localStorage is ever cleared. Errors here are non-fatal.
+  try {
+    const { registerUser } = await import("./registry");
+    await registerUser({ keyId: keyIdBase64, contractId, phone, name });
+  } catch (e) {
+    // A duplicate phone error should have been caught before the biometric
+    // step. If it surfaces here, log it but don't break the session.
+    console.warn("Registry save failed:", e instanceof Error ? e.message : e);
+  }
+
   return session;
 }
 

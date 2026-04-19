@@ -73,6 +73,7 @@ export default function SignInPage() {
   const [statusMsg,    setStatusMsg]    = useState("");
   const [showSyncTip,  setShowSyncTip]  = useState(false);
   const [platform,     setPlatform]     = useState<"ios" | "android" | "desktop">("desktop");
+  const [recovering,   setRecovering]   = useState(false);
 
   useEffect(() => {
     if (!authLoading && connected) router.replace("/dashboard");
@@ -88,13 +89,87 @@ export default function SignInPage() {
     }
   }, []);
 
-  function handlePhoneSubmit(e: React.FormEvent) {
+  async function handlePhoneSubmit(e: React.FormEvent) {
     e.preventDefault();
     const digits = phone.replace(/\D/g, "");
     if (digits.length < 7) { setError("Enter a valid phone number"); return; }
     if (mode === "signup" && !name.trim()) { setError("Enter your name to continue"); return; }
     setError("");
+
+    // Check phone uniqueness before triggering biometric
+    if (mode === "signup") {
+      setLoading(true);
+      setStatusMsg("Checking availability…");
+      try {
+        const { isPhoneAvailable } = await import("@/lib/registry");
+        const available = await isPhoneAvailable(phone);
+        if (!available) {
+          setError("An account already exists for this number. Use Sign in instead.");
+          setLoading(false);
+          setStatusMsg("");
+          return;
+        }
+      } catch {
+        // Registry unreachable — proceed anyway, duplicate will be caught on insert
+      }
+      setLoading(false);
+      setStatusMsg("");
+    }
+
     setStep("biometric");
+  }
+
+  // ── Account recovery: localStorage cleared but passkey still on device ──
+  async function handleRecover() {
+    setRecovering(true);
+    setError("");
+    try {
+      const { startAuthentication } = await import("@simplewebauthn/browser");
+      const base64url = (await import("base64url")).default;
+      const { recoverByKeyId } = await import("@/lib/registry");
+      const { writeRecord } = await import("@/lib/passkey").then(m => ({ writeRecord: (m as unknown as { writeRecord: (r: unknown) => void }).writeRecord }));
+
+      // Discoverable WebAuthn — browser shows all passkeys for this site
+      const result = await startAuthentication({
+        optionsJSON: {
+          challenge: base64url("ajora-account-recovery"),
+          allowCredentials: [], // empty = browser picks from all site passkeys
+          userVerification: "preferred",
+        },
+      });
+
+      const keyId = result.id;
+      const user  = await recoverByKeyId(keyId);
+
+      if (!user) {
+        setError("No account found. If you are new, please create an account.");
+        setRecovering(false);
+        return;
+      }
+
+      // Restore localStorage session
+      const { primePasskeyKit } = await import("@/lib/passkey");
+      await primePasskeyKit(user.contractId, user.keyId);
+
+      const session = {
+        phone:       user.phone,
+        name:        user.name,
+        contractId:  user.contractId,
+        keyIdBase64: user.keyId,
+        signedOut:   false,
+      };
+      localStorage.setItem("ajora_session", JSON.stringify(session));
+
+      router.push("/dashboard");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("cancel") || msg.toLowerCase().includes("notallowed")) {
+        setError("Recovery was cancelled. Please try again.");
+      } else {
+        setError("Recovery failed. Try signing in with your phone number.");
+      }
+      setRecovering(false);
+    }
   }
 
   async function handleBiometric() {
@@ -243,14 +318,44 @@ export default function SignInPage() {
                 )}
               </div>
 
-              <button type="submit" style={{
+              <button type="submit" disabled={loading} style={{
                 width: "100%", padding: "14px",
                 background: "var(--green)", color: "#fff",
                 border: "none", borderRadius: 12,
-                fontWeight: 700, fontSize: 15, cursor: "pointer",
+                fontWeight: 700, fontSize: 15, cursor: loading ? "default" : "pointer",
+                opacity: loading ? 0.7 : 1,
               }}>
-                Continue →
+                {loading ? statusMsg || "Checking…" : "Continue →"}
               </button>
+
+              {/* Account recovery — for when localStorage was cleared */}
+              {mode === "signin" && (
+                <div style={{ textAlign: "center", marginTop: 14 }}>
+                  <button
+                    type="button"
+                    onClick={handleRecover}
+                    disabled={recovering}
+                    style={{
+                      background: "none", border: "none", cursor: recovering ? "default" : "pointer",
+                      fontSize: 12, color: recovering ? "var(--ink-muted)" : "var(--green)",
+                      textDecoration: "underline", textDecorationColor: "transparent",
+                      padding: 0, display: "inline-flex", alignItems: "center", gap: 5,
+                    }}
+                    onMouseEnter={e => { if (!recovering) (e.currentTarget.style.textDecorationColor = "var(--green)"); }}
+                    onMouseLeave={e => { (e.currentTarget.style.textDecorationColor = "transparent"); }}
+                  >
+                    {recovering ? (
+                      <>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style={{ animation: "spin 1s linear infinite" }}>
+                          <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" opacity="0.2"/>
+                          <path d="M12 3a9 9 0 019 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                        </svg>
+                        Recovering…
+                      </>
+                    ) : "Can't sign in? Recover your account"}
+                  </button>
+                </div>
+              )}
 
               <p style={{ textAlign: "center", fontSize: 12, color: "var(--ink-muted)", marginTop: 16, lineHeight: 1.6 }}>
                 {mode === "signup"
