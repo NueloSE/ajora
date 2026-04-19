@@ -11,6 +11,7 @@
   "dependencies": {
     "@stellar/freighter-api": "^6.0.1",
     "@stellar/stellar-sdk": "^15.0.1",
+    "@supabase/supabase-js": "^2.103.3",
     "lucide-react": "^1.8.0",
     "next": "16.2.4",
     "passkey-kit": "^0.12.0",
