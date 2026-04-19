@@ -28,7 +28,7 @@ fn test_members_can_join_forming_group() {
     env.mock_all_auths();
 
     let (client, admin, token) = setup(&env);
-    let group_id = client.create_group(&admin, &token, &5_000_000_i128, &100_u32, &3_u32);
+    let group_id = client.create_group(&admin, &token, &5_000_000_i128, &100_u32, &3_u32, &0_u32, &None);
 
     let alice = Address::generate(&env);
     let bob = Address::generate(&env);
@@ -49,7 +49,7 @@ fn test_group_activates_when_full() {
 
     let (client, admin, token) = setup(&env);
     // max_members = 2 so the second join fills it
-    let group_id = client.create_group(&admin, &token, &5_000_000_i128, &100_u32, &2_u32);
+    let group_id = client.create_group(&admin, &token, &5_000_000_i128, &100_u32, &2_u32, &0_u32, &None);
 
     let alice = Address::generate(&env);
     let bob = Address::generate(&env);
@@ -70,7 +70,7 @@ fn test_cannot_join_full_group() {
     env.mock_all_auths();
 
     let (client, admin, token) = setup(&env);
-    let group_id = client.create_group(&admin, &token, &5_000_000_i128, &100_u32, &2_u32);
+    let group_id = client.create_group(&admin, &token, &5_000_000_i128, &100_u32, &2_u32, &0_u32, &None);
 
     let alice = Address::generate(&env);
     let bob = Address::generate(&env);
@@ -89,7 +89,7 @@ fn test_cannot_join_twice() {
     env.mock_all_auths();
 
     let (client, admin, token) = setup(&env);
-    let group_id = client.create_group(&admin, &token, &5_000_000_i128, &100_u32, &5_u32);
+    let group_id = client.create_group(&admin, &token, &5_000_000_i128, &100_u32, &5_u32, &0_u32, &None);
 
     let alice = Address::generate(&env);
 
@@ -105,7 +105,7 @@ fn test_cannot_join_active_group() {
     env.mock_all_auths();
 
     let (client, admin, token) = setup(&env);
-    let group_id = client.create_group(&admin, &token, &5_000_000_i128, &100_u32, &2_u32);
+    let group_id = client.create_group(&admin, &token, &5_000_000_i128, &100_u32, &2_u32, &0_u32, &None);
 
     let alice = Address::generate(&env);
     let bob = Address::generate(&env);
@@ -123,7 +123,7 @@ fn test_payout_order_matches_join_order() {
     env.mock_all_auths();
 
     let (client, admin, token) = setup(&env);
-    let group_id = client.create_group(&admin, &token, &5_000_000_i128, &100_u32, &3_u32);
+    let group_id = client.create_group(&admin, &token, &5_000_000_i128, &100_u32, &3_u32, &0_u32, &None);
 
     let alice = Address::generate(&env);
     let bob = Address::generate(&env);

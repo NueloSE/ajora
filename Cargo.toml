@@ -4,6 +4,7 @@ members = [
     "contracts/rotating_savings",
     "contracts/target_savings",
     "contracts/zk_verifier",
+    "contracts/reputation",
 ]
 
 [workspace.dependencies]

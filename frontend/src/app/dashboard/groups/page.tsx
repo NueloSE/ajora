@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { fetchAllGroups, fetchUsdcBalance, hasZkProofOnChain, type OnChainGroup, stroopsToUsdc } from "@/lib/soroban";
+import { fetchAllGroups, fetchUsdcBalance, hasZkProofOnChain, type OnChainGroup, stroopsToUsdc, REPUTATION_ID } from "@/lib/soroban";
 import { createGroup, joinGroup, contribute } from "@/lib/contracts";
 import { useWallet } from "@/context/WalletContext";
 
@@ -37,7 +37,7 @@ export default function GroupsPage() {
   const [submitting,  setSubmitting]  = useState(false);
 
   const [form, setForm] = useState({
-    name: "", amount: "10", members: "4", cycleDays: "30",
+    name: "", amount: "10", members: "4", cycleDays: "30", minScore: "0",
   });
 
   const loadGroups = useCallback(async () => {
@@ -79,11 +79,17 @@ export default function GroupsPage() {
     setTxError(null);
     setTxHash(null);
     try {
+      const minScore = Number(form.minScore);
+      // Always wire reputation when available — even Open groups (minScore=0) need
+      // it so that defaults count against score and re-entry ordering works correctly
+      const repContract = REPUTATION_ID || null;
       const hash = await createGroup(
         address,
         Number(form.amount),
         Number(form.cycleDays),
         Number(form.members),
+        minScore,
+        repContract,
       );
       setTxHash(hash);
       setShowCreate(false);
@@ -138,7 +144,15 @@ export default function GroupsPage() {
       setJoinTarget(null);
       await loadGroups();
     } catch (e) {
-      setTxError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      // Map on-chain error codes to human-readable messages
+      if (msg.includes("14") || msg.toLowerCase().includes("reputation")) {
+        setTxError("Reputation check failed — your score is too low or you have unpaid debts. Check your reputation on the dashboard.");
+      } else if (msg.toLowerCase().includes("locked")) {
+        setTxError("Your account is locked due to repeated defaults. Check your reputation on the dashboard for the unlock date.");
+      } else {
+        setTxError(msg);
+      }
     }
   }
 
@@ -303,6 +317,38 @@ export default function GroupsPage() {
                   />
                 </div>
               ))}
+
+              {/* Minimum reputation score selector */}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 6 }}>
+                  Member eligibility
+                </label>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {[
+                    { value: "0",  label: "Open",    desc: "Anyone can join, including re-entry members" },
+                    { value: "60", label: "Standard", desc: "Score ≥ 60 required — no prior uncured defaults" },
+                    { value: "80", label: "Trusted",  desc: "Score ≥ 80 required — trusted members only" },
+                  ].map(opt => (
+                    <label key={opt.value} style={{
+                      display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer",
+                      padding: "10px 14px",
+                      border: `1.5px solid ${form.minScore === opt.value ? "var(--green)" : "var(--border)"}`,
+                      borderRadius: 10, background: form.minScore === opt.value ? "rgba(11,61,46,0.05)" : "var(--bg)",
+                    }}>
+                      <input
+                        type="radio" name="minScore" value={opt.value}
+                        checked={form.minScore === opt.value}
+                        onChange={e => setForm(f => ({ ...f, minScore: e.target.value }))}
+                        style={{ marginTop: 2, accentColor: "var(--green)" }}
+                      />
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>{opt.label}</div>
+                        <div style={{ fontSize: 11, color: "var(--ink-muted)", marginTop: 2 }}>{opt.desc}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <div style={{ display: "flex", gap: 10, marginTop: 28 }}>

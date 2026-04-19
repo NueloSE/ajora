@@ -30,7 +30,7 @@ fn setup_active_group(
     token_admin_client.mint(&alice, &50_000_000_i128);
     token_admin_client.mint(&bob, &50_000_000_i128);
 
-    let group_id = client.create_group(&admin, &token_address, &5_000_000_i128, &100_u32, &2_u32);
+    let group_id = client.create_group(&admin, &token_address, &5_000_000_i128, &100_u32, &2_u32, &0_u32, &None);
     client.join_group(&group_id, &alice);
     client.join_group(&group_id, &bob);
 

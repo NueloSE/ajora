@@ -15,10 +15,11 @@ import {
 const RPC_URL = process.env.NEXT_PUBLIC_STELLAR_RPC_URL ?? "https://soroban-testnet.stellar.org";
 const NETWORK = process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE ?? Networks.TESTNET;
 
-export const ROTATING_ID  = process.env.NEXT_PUBLIC_ROTATING_CONTRACT_ID ?? "";
-export const TARGET_ID    = process.env.NEXT_PUBLIC_TARGET_CONTRACT_ID   ?? "";
-export const ZK_ID        = process.env.NEXT_PUBLIC_ZK_VERIFIER_CONTRACT_ID ?? "";
-export const TESTNET_USDC = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA";
+export const ROTATING_ID    = process.env.NEXT_PUBLIC_ROTATING_CONTRACT_ID    ?? "";
+export const TARGET_ID      = process.env.NEXT_PUBLIC_TARGET_CONTRACT_ID      ?? "";
+export const ZK_ID          = process.env.NEXT_PUBLIC_ZK_VERIFIER_CONTRACT_ID ?? "";
+export const REPUTATION_ID  = process.env.NEXT_PUBLIC_REPUTATION_CONTRACT_ID  ?? "";
+export const TESTNET_USDC   = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA";
 
 // A funded testnet account used as the fee-source for read-only simulations.
 // This is a public key only — no secret is exposed.
@@ -53,6 +54,27 @@ async function simulate(
 
 export type GroupStatusTag = "Forming" | "Active" | "Completed" | "Cancelled";
 export type PoolStatusTag  = "Forming" | "Active" | "Matured"   | "Cancelled";
+
+export interface DebtRecord {
+  creditor:  string;
+  amount:    bigint;
+  group_id:  number;
+  cycle:     number;
+  token:     string;
+  paid:      boolean;
+}
+
+export interface ReputationData {
+  score:             number;
+  defaultCount:      number;
+  activeGroups:      number;
+  maxAllowedGroups:  number;
+  isLocked:          boolean;
+  lockedUntilLedger: number;
+  lockedUntilDate:   Date | null;
+  debts:             DebtRecord[];
+  unpaidDebts:       DebtRecord[];
+}
 
 export interface OnChainGroup {
   id: number;
@@ -203,6 +225,60 @@ export async function fetchUsdcBalance(address: string): Promise<bigint> {
   ]);
   if (raw === null || raw === undefined) return BigInt(0);
   return BigInt(String(raw));
+}
+
+// ---------------------------------------------------------------------------
+// Reputation reads
+// ---------------------------------------------------------------------------
+
+export async function fetchReputationData(address: string): Promise<ReputationData | null> {
+  if (!REPUTATION_ID || !address) return null;
+
+  const addr = nativeToScVal(address, { type: "address" });
+
+  const [score, debtsRaw, isLocked, lockedUntilRaw, activeGroups, maxAllowed, defaultCount, latestLedger] =
+    await Promise.all([
+      simulate(REPUTATION_ID, "get_score",         [addr]),
+      simulate(REPUTATION_ID, "get_debts",         [addr]),
+      simulate(REPUTATION_ID, "is_locked",         [addr]),
+      simulate(REPUTATION_ID, "locked_until",      [addr]),
+      simulate(REPUTATION_ID, "get_active_groups", [addr]),
+      simulate(REPUTATION_ID, "max_allowed_groups",[addr]),
+      simulate(REPUTATION_ID, "get_default_count", [addr]),
+      rpc.getLatestLedger().catch(() => null),
+    ]);
+
+  const scoreNum            = Number(score ?? 100);
+  const lockedUntilLedger   = Number(lockedUntilRaw ?? 0);
+  const isLockedBool        = Boolean(isLocked);
+
+  let lockedUntilDate: Date | null = null;
+  if (isLockedBool && lockedUntilLedger > 0 && latestLedger) {
+    const remaining      = Math.max(0, lockedUntilLedger - latestLedger.sequence);
+    lockedUntilDate      = new Date(Date.now() + remaining * 5_000);
+  }
+
+  const rawDebts = Array.isArray(debtsRaw) ? (debtsRaw as Record<string, unknown>[]) : [];
+  const debts: DebtRecord[] = rawDebts.map(d => ({
+    creditor: String(d.creditor ?? ""),
+    amount:   BigInt(String(d.amount ?? "0")),
+    group_id: Number(d.group_id ?? 0),
+    cycle:    Number(d.cycle ?? 0),
+    token:    String(d.token ?? ""),
+    paid:     Boolean(d.paid),
+  }));
+
+  return {
+    score:            scoreNum,
+    defaultCount:     Number(defaultCount ?? 0),
+    activeGroups:     Number(activeGroups ?? 0),
+    maxAllowedGroups: Number(maxAllowed ?? 2),
+    isLocked:         isLockedBool,
+    lockedUntilLedger,
+    lockedUntilDate,
+    debts,
+    unpaidDebts: debts.filter(d => !d.paid),
+  };
 }
 
 // ---------------------------------------------------------------------------

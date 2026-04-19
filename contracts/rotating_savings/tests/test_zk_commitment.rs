@@ -15,7 +15,7 @@ fn setup_active_group(env: &Env) -> (RotatingSavingsClient<'_>, u32, Address, Ad
     let token = Address::generate(env);
     let admin = Address::generate(env);
 
-    let group_id = client.create_group(&admin, &token, &5_000_000_i128, &100_u32, &2_u32);
+    let group_id = client.create_group(&admin, &token, &5_000_000_i128, &100_u32, &2_u32, &0_u32, &None);
 
     let alice = Address::generate(env);
     let bob = Address::generate(env);

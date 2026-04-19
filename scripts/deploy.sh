@@ -51,12 +51,13 @@ curl -s "https://friendbot.stellar.org?addr=$DEPLOYER_ADDRESS" | \
 echo ""
 echo "==> Building contracts (release, wasm32)..."
 cargo build --target wasm32-unknown-unknown --release \
-  -p rotating-savings -p target-savings -p zk-verifier 2>&1 | grep -E "Compiling|Finished|error"
+  -p rotating-savings -p target-savings -p zk-verifier -p reputation 2>&1 | grep -E "Compiling|Finished|error"
 
 WASM_DIR="target/wasm32-unknown-unknown/release"
 echo "  rotating_savings : $(wc -c < $WASM_DIR/rotating_savings.wasm) bytes"
 echo "  target_savings   : $(wc -c < $WASM_DIR/target_savings.wasm) bytes"
 echo "  zk_verifier      : $(wc -c < $WASM_DIR/zk_verifier.wasm) bytes"
+echo "  reputation       : $(wc -c < $WASM_DIR/reputation.wasm) bytes"
 
 # ---------------------------------------------------------------------------
 # 2b. Optimize WASMs (required by Soroban — raw release WASMs are rejected)
@@ -66,9 +67,11 @@ echo "==> Optimizing WASMs..."
 stellar contract optimize --wasm $WASM_DIR/rotating_savings.wasm
 stellar contract optimize --wasm $WASM_DIR/target_savings.wasm
 stellar contract optimize --wasm $WASM_DIR/zk_verifier.wasm
+stellar contract optimize --wasm $WASM_DIR/reputation.wasm
 echo "  rotating_savings (opt): $(wc -c < $WASM_DIR/rotating_savings.optimized.wasm) bytes"
 echo "  target_savings   (opt): $(wc -c < $WASM_DIR/target_savings.optimized.wasm) bytes"
 echo "  zk_verifier      (opt): $(wc -c < $WASM_DIR/zk_verifier.optimized.wasm) bytes"
+echo "  reputation       (opt): $(wc -c < $WASM_DIR/reputation.optimized.wasm) bytes"
 
 # ---------------------------------------------------------------------------
 # 3. Deploy contracts
@@ -97,6 +100,14 @@ ZK_ID=$(stellar contract deploy \
   --network $NETWORK)
 echo "  ID: $ZK_ID"
 
+echo ""
+echo "==> Deploying reputation..."
+REPUTATION_ID=$(stellar contract deploy \
+  --wasm $WASM_DIR/reputation.optimized.wasm \
+  --source $DEPLOYER \
+  --network $NETWORK)
+echo "  ID: $REPUTATION_ID"
+
 # ---------------------------------------------------------------------------
 # 4. Initialize ZK verifier with the circuit's Verification Key
 # ---------------------------------------------------------------------------
@@ -123,6 +134,19 @@ stellar contract invoke \
 echo "  ZK verifier initialised ✓"
 
 # ---------------------------------------------------------------------------
+# 5. Initialize Reputation contract with deployer as admin
+# ---------------------------------------------------------------------------
+echo ""
+echo "==> Initialising reputation contract..."
+stellar contract invoke \
+  --id $REPUTATION_ID \
+  --source $DEPLOYER \
+  --network $NETWORK \
+  -- initialize \
+  --admin $DEPLOYER_ADDRESS
+echo "  Reputation contract initialised ✓"
+
+# ---------------------------------------------------------------------------
 # 5. Write contract IDs to frontend and agent env files
 # ---------------------------------------------------------------------------
 echo ""
@@ -132,6 +156,7 @@ cat > frontend/.env.local << ENVEOF
 NEXT_PUBLIC_ROTATING_CONTRACT_ID=$ROTATING_ID
 NEXT_PUBLIC_TARGET_CONTRACT_ID=$TARGET_ID
 NEXT_PUBLIC_ZK_VERIFIER_CONTRACT_ID=$ZK_ID
+NEXT_PUBLIC_REPUTATION_CONTRACT_ID=$REPUTATION_ID
 NEXT_PUBLIC_STELLAR_RPC_URL=$RPC
 NEXT_PUBLIC_NETWORK_PASSPHRASE=$NETWORK_PASSPHRASE
 ENVEOF
@@ -144,8 +169,12 @@ if [ -f "agent/.env" ]; then
     -e "s|^ROTATING_SAVINGS_CONTRACT_ID=.*|ROTATING_SAVINGS_CONTRACT_ID=$ROTATING_ID|" \
     -e "s|^TARGET_SAVINGS_CONTRACT_ID=.*|TARGET_SAVINGS_CONTRACT_ID=$TARGET_ID|" \
     -e "s|^ZK_VERIFIER_CONTRACT_ID=.*|ZK_VERIFIER_CONTRACT_ID=$ZK_ID|" \
+    -e "s|^REPUTATION_CONTRACT_ID=.*|REPUTATION_CONTRACT_ID=$REPUTATION_ID|" \
     -e "s|^USE_MOCK_DATA=.*|USE_MOCK_DATA=false|" \
     agent/.env
+  # Add REPUTATION_CONTRACT_ID if it doesn't exist yet
+  grep -q "^REPUTATION_CONTRACT_ID=" agent/.env || \
+    echo "REPUTATION_CONTRACT_ID=$REPUTATION_ID" >> agent/.env
   rm -f agent/.env.bak
 else
   # Create from scratch (user must add ANTHROPIC_API_KEY manually)
@@ -174,6 +203,7 @@ echo ""
 echo "  Rotating Savings : $ROTATING_ID"
 echo "  Target Savings   : $TARGET_ID"
 echo "  ZK Verifier      : $ZK_ID"
+echo "  Reputation       : $REPUTATION_ID"
 echo ""
 echo "  Explorer:"
 echo "  https://stellar.expert/explorer/testnet/account/$DEPLOYER_ADDRESS"

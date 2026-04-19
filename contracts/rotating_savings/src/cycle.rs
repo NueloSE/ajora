@@ -1,11 +1,12 @@
 use soroban_sdk::{Address, BytesN, Env, token};
 use crate::storage::{
     Group, GroupStatus,
-    save_group,
+    save_group, move_to_last,
     set_contributed, has_contributed, clear_contributions,
     save_commitment,
 };
 use crate::events;
+use crate::reputation_client::ReputationClient;
 
 // ---------------------------------------------------------------------------
 // Cycle Logic
@@ -45,13 +46,13 @@ pub fn record_contribution(env: &Env, group_id: u32, group: Group, member: &Addr
 
 /// Close the current cycle:
 ///   - Send the pooled USDC to the cycle's designated recipient
+///   - Award reputation completion bonus to every honest member
 ///   - Store ZK commitments for every member who contributed honestly
 ///   - Clear contribution flags for the next cycle
 ///   - Advance the cycle counter or mark the group as Completed
+///   - If completed, decrement active-group count for all members in reputation
 ///
 /// Can be called by the AI agent, the admin, or any member after the deadline.
-/// All members who contributed honestly get a commitment stored regardless
-/// of whether the deadline had to be enforced.
 pub fn close_cycle(env: &Env, group_id: u32, mut group: Group) -> Address {
     // Determine payout recipient for this cycle
     let recipient = group
@@ -59,9 +60,11 @@ pub fn close_cycle(env: &Env, group_id: u32, mut group: Group) -> Address {
         .get(group.current_cycle)
         .expect("No recipient for cycle");
 
-    // Calculate total pool = contribution_amount × number of members
-    // Members who defaulted reduce the pool — their slots are zero
-    let total_pool = calculate_pool(&env, group_id, &group);
+    // Collect honest members BEFORE clearing contribution flags
+    let honest_members = collect_honest_members(env, group_id, &group.members);
+
+    // Total pool = honest contributions only (defaulters are excluded)
+    let total_pool = (honest_members.len() as i128) * group.contribution_amount;
 
     // Send payout to recipient
     if total_pool > 0 {
@@ -75,11 +78,20 @@ pub fn close_cycle(env: &Env, group_id: u32, mut group: Group) -> Address {
 
     events::payout_sent(env, group_id, &recipient, group.current_cycle, total_pool);
 
-    // Store ZK commitments for members who contributed honestly this cycle
+    // Store ZK commitments for honest members
     store_honest_member_commitments(env, group_id, &group);
 
     // Reset contribution flags for the next cycle
     clear_contributions(env, group_id, &group.members);
+
+    // Reputation: award +5/+10 completion bonus to every honest member
+    if let Some(rep_addr) = group.reputation_contract.clone() {
+        let rep = ReputationClient::new(env, &rep_addr);
+        let caller = env.current_contract_address();
+        for m in honest_members.iter() {
+            rep.record_completion(&caller, &m);
+        }
+    }
 
     // Advance cycle state
     let _completed_cycle = group.current_cycle;
@@ -90,6 +102,15 @@ pub fn close_cycle(env: &Env, group_id: u32, mut group: Group) -> Address {
         group.status = GroupStatus::Completed;
         save_group(env, group_id, &group);
         events::group_completed(env, group_id);
+
+        // Reputation: everyone leaves the group — decrement their active count
+        if let Some(rep_addr) = group.reputation_contract.clone() {
+            let rep = ReputationClient::new(env, &rep_addr);
+            let caller = env.current_contract_address();
+            for m in group.members.iter() {
+                rep.decrement_active(&caller, &m);
+            }
+        }
     } else {
         // Start the next cycle — record when it begins
         group.cycle_start_ledger = env.ledger().sequence();
@@ -101,29 +122,75 @@ pub fn close_cycle(env: &Env, group_id: u32, mut group: Group) -> Address {
 
 /// Flag a member as defaulted when they miss the cycle deadline.
 ///
-/// Records the default event on-chain. The member is NOT removed from
-/// payout_order (they still receive their payout when their turn comes —
-/// the group collectively absorbs the shortfall). However their default
-/// is permanently visible in events and prevents them from joining new groups
-/// through the ZK reputation system.
-pub fn flag_default(env: &Env, group_id: u32, group: &Group, member: &Address) {
+/// In addition to recording the default on the reputation contract, this
+/// function implements the payout-demotion rule:
+///
+///   If the defaulter has a payout slot scheduled for a FUTURE cycle
+///   (their position in payout_order > current_cycle), they are automatically
+///   moved to the last position. They pay their dues before they can benefit.
+///
+/// A member whose payout slot is in the current cycle or already past is not
+/// affected — they either receive the (reduced) payout or have already been paid.
+pub fn flag_default(env: &Env, group_id: u32, mut group: Group, member: &Address) {
     events::member_defaulted(env, group_id, member, group.current_cycle);
+
+    if let Some(rep_addr) = &group.reputation_contract.clone() {
+        // The creditor is whoever receives the payout this cycle
+        let creditor = group
+            .payout_order
+            .get(group.current_cycle)
+            .expect("No payout recipient for current cycle");
+
+        let rep = ReputationClient::new(env, rep_addr);
+        rep.record_default(
+            &env.current_contract_address(),
+            member,
+            &creditor,
+            &group.contribution_amount,
+            &group.token,
+            &group_id,
+            &group.current_cycle,
+        );
+    }
+
+    // Payout demotion: if the defaulter has a future payout slot, move them to last
+    let mut defaulter_idx: Option<u32> = None;
+    for i in 0..group.payout_order.len() {
+        if group.payout_order.get(i).unwrap() == *member {
+            defaulter_idx = Some(i);
+            break;
+        }
+    }
+
+    if let Some(idx) = defaulter_idx {
+        // idx > current_cycle means their slot is in a future cycle (not yet paid)
+        if idx > group.current_cycle {
+            let last_pos = group.payout_order.len() - 1;
+            group.payout_order = move_to_last(env, &group.payout_order, idx);
+            save_group(env, group_id, &group);
+            events::payout_position_moved(env, group_id, member, idx, last_pos);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
 
-/// Calculate the total pool available for payout this cycle.
-/// Only counts members who actually contributed — defaults are excluded.
-fn calculate_pool(env: &Env, group_id: u32, group: &Group) -> i128 {
-    let mut pool: i128 = 0;
-    for member in group.members.iter() {
-        if has_contributed(env, group_id, &member) {
-            pool += group.contribution_amount;
+/// Collect all members who have contributed in the current cycle.
+/// Called before clearing contribution flags so we don't lose this info.
+fn collect_honest_members(
+    env: &Env,
+    group_id: u32,
+    members: &soroban_sdk::Vec<Address>,
+) -> soroban_sdk::Vec<Address> {
+    let mut honest: soroban_sdk::Vec<Address> = soroban_sdk::Vec::new(env);
+    for m in members.iter() {
+        if has_contributed(env, group_id, &m) {
+            honest.push_back(m);
         }
     }
-    pool
+    honest
 }
 
 /// Store a ZK commitment for every member who contributed honestly this cycle.
@@ -147,11 +214,10 @@ pub fn store_commitment_for_member(
 }
 
 /// At cycle close, store commitments for all members who contributed honestly.
-/// Commitments passed in via the close_cycle call parameters.
 /// If no commitment is provided for a member (they defaulted), none is stored.
 fn store_honest_member_commitments(_env: &Env, _group_id: u32, _group: &Group) {
     // We emit a marker event so the frontend/agent knows to submit
-    // individual commitments via store_commitment_for_member after close
+    // individual commitments via store_commitment_for_member after close.
     // This is the safe pattern — commitments come from the member's device
-    // where their private wallet_address is known
+    // where their private wallet_address is known.
 }

@@ -152,10 +152,25 @@ The AI agent runs autonomously throughout each cycle:
 If a member fails to contribute by the deadline:
 
 - The smart contract flags the default on-chain
-- The member is blocked from future group participation
-- The default is permanently recorded as part of their on-chain history
+- The AI agent notifies the group and records the debt owed to the cycle's payout recipient
+- **Payout demotion** — if the defaulter had a future payout slot, they are automatically moved to the **last position** in the rotation. They contribute their dues before they benefit again.
+- The default reduces their on-chain reputation score and is recorded as a debt owed to the cycle's payout recipient
+- Members with unpaid debts are blocked from joining new groups until the debt is repaid
+- On repayment, the debt is cleared and the score partially recovers (+8 points)
 
-### 7. ZK Credit History
+### 7. On-Chain Reputation System
+
+Every member has a **reputation score (0–100)** stored on the Stellar blockchain:
+
+- **Starts at 100** for every new member
+- **Increases** with each honest cycle completion (+5, or +10 for re-entry members rebuilding trust)
+- **Decreases** on default: −20 (first), −25 (second), −30 (third+)
+- **Third+ default** triggers a **6-month lockout** — cannot join any group
+- **Repaying a debt** restores +8 and lifts the joining block
+
+Group creators choose a minimum score: **Open** (anyone), **Standard** (score ≥ 60), or **Trusted** (score ≥ 80). Members with a history of defaults can only join Open re-entry groups, where they are placed last in the payout order and must prove reliability before regaining their standing.
+
+### 8. ZK Credit History
 
 After completing a full cycle honestly:
 
@@ -257,9 +272,10 @@ All contracts are live on Stellar Testnet and can be verified on [Stellar Expert
 
 | Contract | Address |
 | -------- | ------- |
-| Rotating Savings (ajo/esusu) | `CBJZDI7LJ3L7ZFQAP2NIIQ3Z4EHLOX27ARTMJD3LQCM3Q2VSXJAQ65D7` |
-| Target Savings | `CDJX3LE5XFAGTA7KOF2OKGYQDOCNCWY2S6KHW7B36O6YCPFCK7ZRZI6S` |
-| ZK Credit Verifier | `CCYOYAMU2WFPKDVQUT5ZYYHF45IRBOEIDR3SJZVBSVTXBMUOWCRCFLDZ` |
+| Rotating Savings (ajo/esusu) | `CCPYLDO5F4KNJQAWGWN3AK6TEOC433QZJSI3HGLV3CTOC7YHJW3ZYJOX` |
+| Target Savings | `CA7GRA676ZANWAYZIK3VBEACRV7ZJ6TWKXAMVK3HEOA3OOODPFWZT55H` |
+| ZK Credit Verifier | `CDOEPMQB3T3MJNG2GQRUKPPSXJO7ZC3TKOFGNTN4TJ2OC2ZR523S6EXH` |
+| Reputation | `CA4DRJPKRRQMO6C7X4WDHBCWTF2SO5VAKZUUQ3JDZNTC7GOC3TRXNOIN` |
 
 Network: `Test SDF Network ; September 2015`  
 RPC: `https://soroban-testnet.stellar.org`
@@ -273,6 +289,7 @@ RPC: `https://soroban-testnet.stellar.org`
 | Soroban smart contract — rotating savings (ajo/esusu)   | ✅ Built & deployed |
 | Soroban smart contract — target savings pool            | ✅ Built & deployed |
 | Soroban smart contract — ZK credit verifier             | ✅ Built & deployed |
+| Soroban smart contract — on-chain reputation system     | ✅ Built & deployed |
 | Passkey onboarding (non-custodial, no seed phrase)      | ✅ Built |
 | Backup device — add second phone as co-signer on-chain  | ✅ Built |
 | Contributions in testnet USDC                           | ✅ Built |
@@ -280,8 +297,12 @@ RPC: `https://soroban-testnet.stellar.org`
 | Automated payout logic                                  | ✅ Built |
 | Default detection and on-chain flagging                 | ✅ Built |
 | ZK proof of contribution history                        | ✅ Built (Noir circuit) |
+| Reputation score card on dashboard                      | ✅ Built |
+| Debt repayment with score recovery                      | ✅ Built |
+| Group eligibility gate (min score, re-entry ordering)   | ✅ Built |
 | Group dashboard UI (mobile-first)                       | ✅ Built |
-| AI agent (reminders + payout trigger)                   | In scope |
+| AI agent (reminders, default flagging, payout trigger)  | ✅ Built |
+| AI agent reputation-aware reminders                     | ✅ Built |
 
 ---
 

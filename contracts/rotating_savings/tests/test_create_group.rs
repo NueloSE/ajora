@@ -37,6 +37,8 @@ fn test_create_group_returns_id_1() {
         &5_000_000_i128,  // 0.5 USDC per cycle
         &100_u32,         // 100 ledgers per cycle
         &5_u32,           // 5 members
+        &0_u32,           // min_score = 0 (no reputation requirement)
+        &None,            // no reputation contract
     );
 
     assert_eq!(group_id, 1, "First group should have ID 1");
@@ -49,9 +51,9 @@ fn test_create_group_sequential_ids() {
 
     let (client, admin, token) = setup(&env);
 
-    let id1 = client.create_group(&admin, &token, &5_000_000_i128, &100_u32, &5_u32);
-    let id2 = client.create_group(&admin, &token, &5_000_000_i128, &100_u32, &3_u32);
-    let id3 = client.create_group(&admin, &token, &5_000_000_i128, &100_u32, &10_u32);
+    let id1 = client.create_group(&admin, &token, &5_000_000_i128, &100_u32, &5_u32, &0_u32, &None);
+    let id2 = client.create_group(&admin, &token, &5_000_000_i128, &100_u32, &3_u32, &0_u32, &None);
+    let id3 = client.create_group(&admin, &token, &5_000_000_i128, &100_u32, &10_u32, &0_u32, &None);
 
     assert_eq!(id1, 1);
     assert_eq!(id2, 2);
@@ -71,6 +73,8 @@ fn test_create_group_initial_state() {
         &10_000_000_i128,   // 1 USDC
         &120_960_u32,        // ~1 week in ledgers
         &10_u32,
+        &0_u32,
+        &None,
     );
 
     let group = client.get_group(&group_id);

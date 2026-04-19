@@ -24,7 +24,7 @@ import {
   xdr,
 } from "@stellar/stellar-sdk";
 
-import { rpc, ROTATING_ID, TARGET_ID } from "./soroban";
+import { rpc, ROTATING_ID, TARGET_ID, REPUTATION_ID } from "./soroban";
 import { getSession, primePasskeyKit } from "./passkey";
 
 const NETWORK   = process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE ?? Networks.TESTNET;
@@ -126,15 +126,25 @@ export async function createGroup(
   contributionUsdc: number,
   cycleDays: number,
   maxMembers: number,
+  minScore = 0,
+  reputationContract: string | null = null,
 ): Promise<string> {
   const stroops = BigInt(Math.round(contributionUsdc * 10_000_000));
   const ledgers = Math.round(cycleDays * 17_280);
+
+  // Option<Address> — ScvVoid for None, scvAddress for Some(Address)
+  const repArg = reputationContract
+    ? nativeToScVal(reputationContract, { type: "address" })
+    : xdr.ScVal.scvVoid();
+
   return buildAndSubmit(ROTATING_ID, "create_group", [
     addressArg(caller),
     addressArg(TESTNET_USDC),
     nativeToScVal(stroops, { type: "i128" }),
     nativeToScVal(ledgers, { type: "u32" }),
     nativeToScVal(maxMembers, { type: "u32" }),
+    nativeToScVal(minScore, { type: "u32" }),
+    repArg,
   ]);
 }
 
@@ -208,5 +218,26 @@ export async function transferUsdc(
     addressArg(from),
     addressArg(to),
     nativeToScVal(stroops, { type: "i128" }),
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// Reputation
+// ---------------------------------------------------------------------------
+
+/**
+ * Repay a specific debt — transfers USDC from the debtor's smart wallet
+ * directly to the creditor. Awards +8 to the debtor's reputation score.
+ * Triggers a biometric prompt to sign the auth entry.
+ */
+export async function repayDebt(
+  debtor: string,
+  groupId: number,
+  cycle: number,
+): Promise<string> {
+  return buildAndSubmit(REPUTATION_ID, "repay_debt", [
+    addressArg(debtor),
+    nativeToScVal(groupId, { type: "u32" }),
+    nativeToScVal(cycle,   { type: "u32" }),
   ]);
 }

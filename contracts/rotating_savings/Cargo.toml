@@ -11,6 +11,7 @@ soroban-sdk = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+reputation = { path = "../reputation", features = ["testutils"] }
 
 [features]
 testutils = ["soroban-sdk/testutils"]
@@ -38,3 +39,7 @@ path = "tests/test_defaults.rs"
 [[test]]
 name = "test_zk_commitment"
 path = "tests/test_zk_commitment.rs"
+
+[[test]]
+name = "test_reputation_integration"
+path = "tests/test_reputation_integration.rs"

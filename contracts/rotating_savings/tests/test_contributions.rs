@@ -31,7 +31,7 @@ fn setup_active_group(
     token_admin_client.mint(&alice, &20_000_000_i128);
     token_admin_client.mint(&bob, &20_000_000_i128);
 
-    let group_id = client.create_group(&admin, &token_address, &5_000_000_i128, &100_u32, &2_u32);
+    let group_id = client.create_group(&admin, &token_address, &5_000_000_i128, &100_u32, &2_u32, &0_u32, &None);
     client.join_group(&group_id, &alice);
     client.join_group(&group_id, &bob);
 
@@ -142,7 +142,7 @@ fn test_cannot_contribute_to_forming_group() {
     token_admin_client.mint(&alice, &20_000_000_i128);
 
     // Create group but don't fill it — stays Forming
-    let group_id = client.create_group(&admin, &token_address, &5_000_000_i128, &100_u32, &5_u32);
+    let group_id = client.create_group(&admin, &token_address, &5_000_000_i128, &100_u32, &5_u32, &0_u32, &None);
     client.join_group(&group_id, &alice);
 
     // Group is still Forming — contribution should panic with InvalidGroupStatus

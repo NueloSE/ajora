@@ -3,10 +3,11 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
-  fetchAllGroups, fetchAllPools, fetchUsdcBalance,
+  fetchAllGroups, fetchAllPools, fetchUsdcBalance, fetchReputationData,
   stroopsToUsdc,
-  type OnChainGroup, type OnChainPool,
+  type OnChainGroup, type OnChainPool, type ReputationData, type DebtRecord,
 } from "@/lib/soroban";
+import { repayDebt } from "@/lib/contracts";
 import { useWallet } from "@/context/WalletContext";
 
 function greeting() {
@@ -19,10 +20,12 @@ function greeting() {
 export default function DashboardHome() {
   const { address, connected, displayName, name } = useWallet();
 
-  const [groups,  setGroups]  = useState<OnChainGroup[]>([]);
-  const [pools,   setPools]   = useState<OnChainPool[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [balance, setBalance] = useState<string | null>(null);
+  const [groups,     setGroups]     = useState<OnChainGroup[]>([]);
+  const [pools,      setPools]      = useState<OnChainPool[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [balance,    setBalance]    = useState<string | null>(null);
+  const [reputation, setReputation] = useState<ReputationData | null>(null);
+  const [repLoading, setRepLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([fetchAllGroups(), fetchAllPools()])
@@ -36,6 +39,15 @@ export default function DashboardHome() {
     fetchUsdcBalance(address)
       .then(b => setBalance(stroopsToUsdc(b)))
       .catch(() => setBalance(null));
+  }, [address]);
+
+  useEffect(() => {
+    if (!address) { setReputation(null); return; }
+    setRepLoading(true);
+    fetchReputationData(address)
+      .then(setReputation)
+      .catch(() => setReputation(null))
+      .finally(() => setRepLoading(false));
   }, [address]);
 
   const myGroups = address ? groups.filter(g => g.members.includes(address)) : [];
@@ -117,6 +129,23 @@ export default function DashboardHome() {
           accent="var(--ink-soft)"
         />
       </div>
+
+      {/* ── Reputation card ── */}
+      {connected && (
+        <ReputationCard
+          data={reputation}
+          loading={repLoading}
+          address={address!}
+          onRepay={() => {
+            if (!address) return;
+            setRepLoading(true);
+            fetchReputationData(address)
+              .then(setReputation)
+              .catch(() => setReputation(null))
+              .finally(() => setRepLoading(false));
+          }}
+        />
+      )}
 
       {/* ── My Savings section ── */}
       {connected && !loading && hasMemberships && (
@@ -486,6 +515,197 @@ function PoolPreviewCard({ p, myAddress }: { p: OnChainPool; myAddress: string |
           background: isMatured ? "var(--amber)" : undefined,
         }} />
       </div>
+    </div>
+  );
+}
+
+// ─── Reputation card ─────────────────────────────────────────────────────────
+
+function scoreColor(score: number): string {
+  if (score >= 80) return "var(--green)";
+  if (score >= 60) return "var(--amber)";
+  return "#dc2626";
+}
+
+function scoreLabel(rep: ReputationData): string {
+  if (rep.isLocked)       return "LOCKED";
+  if (rep.score >= 80)    return "GOOD STANDING";
+  if (rep.score >= 60)    return "STANDARD";
+  return "RESTRICTED";
+}
+
+function RepayButton({ debt, address, onDone }: {
+  debt: DebtRecord;
+  address: string;
+  onDone: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState<string | null>(null);
+
+  async function handleRepay() {
+    setBusy(true);
+    setErr(null);
+    try {
+      await repayDebt(address, debt.group_id, debt.cycle);
+      onDone();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <button
+        onClick={handleRepay}
+        disabled={busy}
+        style={{
+          padding: "6px 14px",
+          background: busy ? "var(--ink-soft)" : "#dc2626",
+          color: "#fff", border: "none",
+          borderRadius: 7, fontSize: 12, fontWeight: 700,
+          cursor: busy ? "wait" : "pointer",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {busy ? "Repaying…" : "Repay →"}
+      </button>
+      {err && (
+        <div style={{ fontSize: 11, color: "#dc2626", marginTop: 4, maxWidth: 200 }}>
+          {err.slice(0, 80)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReputationCard({ data, loading, address, onRepay }: {
+  data: ReputationData | null;
+  loading: boolean;
+  address: string;
+  onRepay: () => void;
+}) {
+  const score = data?.score ?? 100;
+  const color = scoreColor(score);
+
+  return (
+    <div style={{
+      background: "var(--surface)", border: "1px solid var(--border)",
+      borderRadius: 16, padding: "22px 24px",
+      marginBottom: 32,
+      borderLeft: `4px solid ${data ? color : "var(--border)"}`,
+    }}>
+      {/* Header row */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-muted)", letterSpacing: 0.5, textTransform: "uppercase" }}>
+          Reputation Score
+        </div>
+        {data && !loading && (
+          <span style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+            padding: "3px 10px", borderRadius: 99,
+            background: data.isLocked
+              ? "rgba(220,38,38,0.1)"
+              : data.score >= 80
+                ? "rgba(11,61,46,0.1)"
+                : data.score >= 60
+                  ? "rgba(232,151,10,0.12)"
+                  : "rgba(220,38,38,0.1)",
+            color: data.isLocked ? "#dc2626" : color,
+          }}>
+            {scoreLabel(data)}
+          </span>
+        )}
+      </div>
+
+      {loading || !data ? (
+        <div style={{ height: 56, display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ flex: 1, height: 10, background: "var(--border)", borderRadius: 6, opacity: 0.5 }} />
+          <div style={{ width: 48, height: 10, background: "var(--border)", borderRadius: 6, opacity: 0.3 }} />
+        </div>
+      ) : (
+        <>
+          {/* Score + bar */}
+          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 14 }}>
+            <span style={{ fontSize: 36, fontWeight: 800, color, letterSpacing: "-1.5px", lineHeight: 1 }}>
+              {score}
+            </span>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--ink-muted)", marginBottom: 5 }}>
+                <span>0</span><span>100</span>
+              </div>
+              <div style={{ height: 8, background: "var(--border)", borderRadius: 99, overflow: "hidden" }}>
+                <div style={{
+                  height: "100%", width: `${score}%`,
+                  background: color, borderRadius: 99,
+                  transition: "width 0.4s ease",
+                }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Stats row */}
+          <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: data.unpaidDebts.length > 0 || data.isLocked ? 16 : 0 }}>
+            <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>
+              <span style={{ fontWeight: 700, color: "var(--ink)" }}>{data.activeGroups}</span>
+              {" / "}
+              <span style={{ fontWeight: 700, color: "var(--ink)" }}>{data.maxAllowedGroups}</span>
+              {" active groups allowed"}
+            </div>
+            {data.defaultCount > 0 && (
+              <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>
+                <span style={{ fontWeight: 700, color: "#dc2626" }}>{data.defaultCount}</span>
+                {" default"}{data.defaultCount !== 1 ? "s" : ""}{" on record"}
+              </div>
+            )}
+          </div>
+
+          {/* Lockout banner */}
+          {data.isLocked && (
+            <div style={{
+              background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.2)",
+              borderRadius: 10, padding: "10px 14px", marginBottom: 14,
+              fontSize: 13, color: "#dc2626", fontWeight: 600,
+            }}>
+              Account locked — cannot join new groups
+              {data.lockedUntilDate && (
+                <span style={{ fontWeight: 400, color: "rgba(220,38,38,0.75)" }}>
+                  {" · Unlocks approx. "}{data.lockedUntilDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Unpaid debts */}
+          {data.unpaidDebts.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-muted)", letterSpacing: 0.4, marginBottom: 8, textTransform: "uppercase" }}>
+                Unpaid Debts ({data.unpaidDebts.length})
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {data.unpaidDebts.map((d, i) => (
+                  <div key={i} style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    background: "var(--bg)", border: "1px solid rgba(220,38,38,0.2)",
+                    borderRadius: 10, padding: "10px 14px", gap: 12,
+                  }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#dc2626" }}>
+                        {stroopsToUsdc(d.amount)} USDC
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--ink-muted)", marginTop: 2 }}>
+                        Group #{d.group_id} · Cycle {d.cycle} · to {d.creditor.slice(0, 6)}…{d.creditor.slice(-4)}
+                      </div>
+                    </div>
+                    <RepayButton debt={d} address={address} onDone={onRepay} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

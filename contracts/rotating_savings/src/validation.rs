@@ -35,6 +35,8 @@ pub enum Error {
     MemberContributed     = 12,
     /// No pending payout recipient found
     NoRecipient           = 13,
+    /// Reputation contract rejected this member (locked, unpaid debt, score too low, or at group limit)
+    ReputationCheckFailed = 14,
 }
 
 // ---------------------------------------------------------------------------

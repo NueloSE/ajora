@@ -75,3 +75,18 @@ pub fn group_completed(env: &Env, group_id: u32) {
         (),
     );
 }
+
+/// Emitted when a defaulter's payout position is moved to the end
+/// because they defaulted in a cycle before their scheduled payout
+pub fn payout_position_moved(
+    env: &Env,
+    group_id: u32,
+    member: &Address,
+    from_position: u32,
+    to_position: u32,
+) {
+    env.events().publish(
+        (symbol_short!("pay_move"), group_id),
+        (member.clone(), from_position, to_position),
+    );
+}
