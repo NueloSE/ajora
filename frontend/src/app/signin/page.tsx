@@ -76,8 +76,8 @@ export default function SignInPage() {
   const [recovering,   setRecovering]   = useState(false);
 
   useEffect(() => {
-    if (!authLoading && connected) router.replace("/dashboard");
-  }, [authLoading, connected, router]);
+    if (!authLoading && connected && !showSyncTip) router.replace("/dashboard");
+  }, [authLoading, connected, router, showSyncTip]);
 
   // If a credential exists on this device (even after sign-out), default to sign-in
   useEffect(() => {

@@ -73,6 +73,7 @@ async function buildAndSubmit(
   const authEntries: xdr.SorobanAuthorizationEntry[] =
     ((preparedTx.operations[0] as unknown) as { auth?: xdr.SorobanAuthorizationEntry[] }).auth ?? [];
 
+  let authWasSigned = false;
   if (authEntries.length > 0) {
     const kit = await primePasskeyKit(session.contractId, session.keyIdBase64);
 
@@ -91,13 +92,28 @@ async function buildAndSubmit(
 
       // Sign via WebAuthn — prompts biometric on device
       authEntries[i] = await kit.signAuthEntry(entry, { keyId: session.keyIdBase64 });
+      authWasSigned = true;
+    }
+  }
+
+  // Re-simulate with the signed auth entries so __check_auth is included in
+  // the resource budget. The first simulation skipped __check_auth (empty auth),
+  // which underestimates instruction/byte costs and causes on-chain failure.
+  let finalTx = preparedTx;
+  if (authWasSigned) {
+    const resim = await rpc.simulateTransaction(preparedTx);
+    if (!SorobanRpc.Api.isSimulationError(resim)) {
+      finalTx = SorobanRpc.assembleTransaction(
+        preparedTx,
+        resim as SorobanRpc.Api.SimulateTransactionSuccessResponse,
+      ).build();
     }
   }
 
   // Sign the outer transaction envelope with the fee source keypair
-  preparedTx.sign(feeKeypair);
+  finalTx.sign(feeKeypair);
 
-  const sendResult = await rpc.sendTransaction(preparedTx);
+  const sendResult = await rpc.sendTransaction(finalTx);
   if (sendResult.status === "ERROR") {
     throw new Error(`Submission failed: ${JSON.stringify(sendResult.errorResult)}`);
   }

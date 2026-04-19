@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   fetchAllGroups, fetchAllPools, fetchUsdcBalance, fetchReputationData,
@@ -9,6 +9,7 @@ import {
 } from "@/lib/soroban";
 import { repayDebt } from "@/lib/contracts";
 import { useWallet } from "@/context/WalletContext";
+import { getTestUsdc, FAUCET_STEP_LABELS, type FaucetStep } from "@/lib/faucet";
 
 function greeting() {
   const h = new Date().getHours();
@@ -20,12 +21,14 @@ function greeting() {
 export default function DashboardHome() {
   const { address, connected, displayName, name } = useWallet();
 
-  const [groups,     setGroups]     = useState<OnChainGroup[]>([]);
-  const [pools,      setPools]      = useState<OnChainPool[]>([]);
-  const [loading,    setLoading]    = useState(true);
-  const [balance,    setBalance]    = useState<string | null>(null);
-  const [reputation, setReputation] = useState<ReputationData | null>(null);
-  const [repLoading, setRepLoading] = useState(false);
+  const [groups,      setGroups]      = useState<OnChainGroup[]>([]);
+  const [pools,       setPools]       = useState<OnChainPool[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [balance,     setBalance]     = useState<string | null>(null);
+  const [reputation,  setReputation]  = useState<ReputationData | null>(null);
+  const [repLoading,  setRepLoading]  = useState(false);
+  const [faucetStep,  setFaucetStep]  = useState<FaucetStep>("idle");
+  const [faucetError, setFaucetError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([fetchAllGroups(), fetchAllPools()])
@@ -34,12 +37,28 @@ export default function DashboardHome() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
+  const refreshBalance = useCallback(() => {
     if (!address) { setBalance(null); return; }
     fetchUsdcBalance(address)
       .then(b => setBalance(stroopsToUsdc(b)))
       .catch(() => setBalance(null));
   }, [address]);
+
+  useEffect(() => { refreshBalance(); }, [refreshBalance]);
+
+  async function handleFaucet() {
+    if (!address || faucetStep === "funding" || faucetStep === "trustline" ||
+        faucetStep === "swap" || faucetStep === "transfer") return;
+    setFaucetError(null);
+    try {
+      await getTestUsdc(address, setFaucetStep);
+      // Refresh balance after a short delay to let the ledger settle
+      setTimeout(refreshBalance, 3000);
+    } catch (e) {
+      setFaucetStep("error");
+      setFaucetError(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   useEffect(() => {
     if (!address) { setReputation(null); return; }
@@ -129,6 +148,75 @@ export default function DashboardHome() {
           accent="var(--ink-soft)"
         />
       </div>
+
+      {/* ── Testnet USDC faucet — shown when wallet balance is 0 ── */}
+      {connected && (balance === null || parseFloat(balance ?? "0") < 1) &&
+       faucetStep !== "done" && (
+        <div style={{
+          background: "var(--surface)", border: "1px solid rgba(232,151,10,0.35)",
+          borderRadius: 16, padding: "18px 22px", marginTop: 16, marginBottom: 8,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          gap: 16, flexWrap: "wrap",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+              background: "rgba(232,151,10,0.12)", border: "1px solid rgba(232,151,10,0.25)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
+                  stroke="var(--amber)" strokeWidth="1.8" strokeLinecap="round"/>
+              </svg>
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>
+                Get 200 testnet USDC
+              </div>
+              <div style={{ fontSize: 12, color: "var(--ink-muted)", marginTop: 2 }}>
+                {faucetStep === "idle" || faucetStep === "error"
+                  ? "Free demo tokens — fund your wallet to test contributions"
+                  : FAUCET_STEP_LABELS[faucetStep]}
+              </div>
+              {faucetError && (
+                <div style={{ fontSize: 11, color: "#dc2626", marginTop: 4, lineHeight: 1.4 }}>
+                  {faucetError.slice(0, 120)}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <button
+            onClick={handleFaucet}
+            disabled={faucetStep !== "idle" && faucetStep !== "error"}
+            style={{
+              padding: "9px 20px", flexShrink: 0,
+              background: faucetStep !== "idle" && faucetStep !== "error"
+                ? "var(--border)" : "rgba(232,151,10,0.15)",
+              border: "1px solid rgba(232,151,10,0.4)",
+              color: faucetStep !== "idle" && faucetStep !== "error"
+                ? "var(--ink-muted)" : "var(--amber)",
+              borderRadius: 10, fontWeight: 700, fontSize: 13,
+              cursor: faucetStep !== "idle" && faucetStep !== "error" ? "default" : "pointer",
+              display: "flex", alignItems: "center", gap: 7,
+              transition: "opacity 0.15s",
+            }}
+          >
+            {faucetStep !== "idle" && faucetStep !== "error" ? (
+              <>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                  style={{ animation: "spin 1s linear infinite" }}>
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" opacity="0.2"/>
+                  <path d="M12 3a9 9 0 019 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+                Working…
+              </>
+            ) : (
+              faucetStep === "error" ? "Retry →" : "Get USDC →"
+            )}
+          </button>
+        </div>
+      )}
 
       {/* ── Reputation card ── */}
       {connected && (
