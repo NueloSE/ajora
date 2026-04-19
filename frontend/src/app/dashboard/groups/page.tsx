@@ -49,8 +49,15 @@ export default function GroupsPage() {
     try {
       const gs = await fetchAllGroups();
       setGroups(gs);
-    } catch (e) {
-      console.error("Failed to fetch groups:", e);
+    } catch {
+      // Retry once after 3s — testnet RPC can have brief outages
+      await new Promise(r => setTimeout(r, 3000));
+      try {
+        const gs = await fetchAllGroups();
+        setGroups(gs);
+      } catch (e) {
+        console.error("Failed to fetch groups:", e);
+      }
     } finally {
       setLoading(false);
     }
@@ -59,18 +66,40 @@ export default function GroupsPage() {
   useEffect(() => { loadGroups(); }, [loadGroups]);
   useEffect(() => { fetchGroupNames().then(setGroupNames).catch(() => {}); }, []);
 
-  // Auto-open join modal when ?join=X is in the URL (from a share link)
+  // Auto-open join modal when ?join=X is in the URL (from a share link).
+  // Fetches the specific group directly so it doesn't depend on the full list loading.
   useEffect(() => {
     const joinId = searchParams.get("join");
-    if (!joinId || groups.length === 0) return;
-    const target = groups.find(g => g.id === Number(joinId));
-    if (target && target.status === "Forming") {
-      openJoinModal(target);
-      // Remove the query param so a refresh doesn't re-trigger
-      router.replace("/dashboard/groups", { scroll: false });
+    if (!joinId) return;
+    const id = Number(joinId);
+    if (!id) return;
+
+    async function openFromLink() {
+      // Try from already-loaded groups first
+      const fromList = groups.find(g => g.id === id);
+      if (fromList) {
+        openJoinModal(fromList);
+        router.replace("/dashboard/groups", { scroll: false });
+        return;
+      }
+      // Otherwise fetch the single group directly
+      try {
+        const { fetchGroup } = await import("@/lib/soroban");
+        const g = await fetchGroup(id);
+        if (g) {
+          // Merge into groups list so the card also appears
+          setGroups(prev => prev.some(x => x.id === id) ? prev : [...prev, g]);
+          openJoinModal(g);
+          router.replace("/dashboard/groups", { scroll: false });
+        }
+      } catch {
+        // Silently fail — user sees the groups list normally
+      }
     }
+
+    openFromLink();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, groups]);
+  }, [searchParams]);
 
   const filtered = groups.filter(g =>
     filter === "all" ? true :
