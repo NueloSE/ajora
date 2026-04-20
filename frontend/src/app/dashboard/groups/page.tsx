@@ -43,8 +43,9 @@ export default function GroupsPage() {
   const [paidKeys,   setPaidKeys]   = useState<Set<string>>(new Set());
 
   const [form, setForm] = useState({
-    name: "", amount: "10", members: "4", cycleDays: "30", minScore: "0",
+    name: "", amount: "10", members: "4", cycleDuration: "30", minScore: "0",
   });
+  const [cycleDurationUnit, setCycleDurationUnit] = useState<"minutes" | "hours" | "days">("days");
 
   const loadGroups = useCallback(async () => {
     setLoading(true);
@@ -127,10 +128,17 @@ export default function GroupsPage() {
       // Always wire reputation when available — even Open groups (minScore=0) need
       // it so that defaults count against score and re-entry ordering works correctly
       const repContract = REPUTATION_ID || null;
+      // Convert cycle duration to days for createGroup (which multiplies by 17,280 ledgers/day)
+      const dur = Number(form.cycleDuration);
+      const cycleDays =
+        cycleDurationUnit === "minutes" ? dur / (24 * 60) :
+        cycleDurationUnit === "hours"   ? dur / 24 :
+        dur;
+
       const hash = await createGroup(
         address,
         Number(form.amount),
-        Number(form.cycleDays),
+        cycleDays,
         Number(form.members),
         minScore,
         repContract,
@@ -371,7 +379,6 @@ export default function GroupsPage() {
                 { key: "name",      label: "Group name",                    placeholder: "e.g. Lagos Circle" },
                 { key: "amount",    label: "Contribution per cycle (USDC)", placeholder: "10" },
                 { key: "members",   label: "Max members",                   placeholder: "4" },
-                { key: "cycleDays", label: "Cycle duration (days)",         placeholder: "30" },
               ].map(({ key, label, placeholder }) => (
                 <div key={key}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 6 }}>
@@ -389,6 +396,44 @@ export default function GroupsPage() {
                   />
                 </div>
               ))}
+
+              {/* Cycle duration with unit selector */}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-soft)", display: "block", marginBottom: 6 }}>
+                  Cycle duration
+                </label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    placeholder={cycleDurationUnit === "minutes" ? "4" : cycleDurationUnit === "hours" ? "24" : "30"}
+                    value={form.cycleDuration}
+                    onChange={e => setForm(f => ({ ...f, cycleDuration: e.target.value }))}
+                    style={{
+                      flex: 1, padding: "11px 14px",
+                      border: "1.5px solid var(--border)", borderRadius: 10,
+                      fontSize: 14, color: "var(--ink)", background: "var(--bg)", outline: "none",
+                    }}
+                  />
+                  <select
+                    value={cycleDurationUnit}
+                    onChange={e => setCycleDurationUnit(e.target.value as "minutes" | "hours" | "days")}
+                    style={{
+                      padding: "11px 12px",
+                      border: "1.5px solid var(--border)", borderRadius: 10,
+                      fontSize: 13, fontWeight: 600,
+                      color: "var(--ink)", background: "var(--bg)", outline: "none", cursor: "pointer",
+                    }}
+                  >
+                    <option value="minutes">minutes</option>
+                    <option value="hours">hours</option>
+                    <option value="days">days</option>
+                  </select>
+                </div>
+                {cycleDurationUnit === "minutes" && (
+                  <div style={{ fontSize: 11, color: "var(--ink-muted)", marginTop: 5 }}>
+                    {Math.round(Number(form.cycleDuration || 0) * 12)} ledgers — ideal for demos
+                  </div>
+                )}
+              </div>
 
               {/* Minimum reputation score selector */}
               <div>
