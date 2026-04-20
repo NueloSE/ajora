@@ -1,5 +1,7 @@
 # Ajora — Trustless Rotating Savings on Stellar
 
+> **Judges: [Step-by-step testing guide →](TESTING.md)**
+
 ---
 
 My mother is a market trader in Nigeria. She sells frozen products, works long hours, and saves every naira she can.
@@ -340,6 +342,7 @@ A modest reach of 50,000 active group cycles per month — at an average pool of
 - **DAO governance** — group rules set and voted on by members
 - **Phone number registry** — on-chain registry contract that maps hashed phone numbers to wallet addresses, enforcing uniqueness at registration without exposing the number on-chain; currently phone is a display label only and two users can register with the same number
 - **SMS OTP verification** — stateless OTP relay (e.g. Twilio) that proves a user owns the phone number they register with; combined with the on-chain registry this gives full identity binding with no custodial server
+- **Automatic debt settlement on payout** — when a defaulter reaches their payout position at the end of the rotation, the smart contract automatically checks for outstanding debts before releasing funds; any amount owed is transferred directly to the creditor first, and only the remaining balance is credited to the defaulter; if the debt exceeds the payout, a partial settlement is recorded and the remainder stays on the debt ledger until cleared
 
 ---
 
