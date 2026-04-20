@@ -11,6 +11,7 @@ import {
   TransactionBuilder,
   BASE_FEE,
   scValToNative,
+  nativeToScVal,
   xdr,
   Keypair,
 } from "@stellar/stellar-sdk";
@@ -80,11 +81,7 @@ export async function getCurrentLedger(): Promise<number> {
 export async function fetchMemberReputationScore(member: string): Promise<number> {
   if (!REPUTATION_CONTRACT_ID) return 100;
   const result = await readContract(REPUTATION_CONTRACT_ID, "get_score", [
-    xdr.ScVal.scvAddress(
-      xdr.ScAddress.scAddressTypeAccount(
-        Keypair.fromPublicKey(member).xdrAccountId(),
-      ),
-    ),
+    nativeToScVal(member, { type: "address" }),
   ]);
   return typeof result === "number" ? result : Number(result ?? 100);
 }
@@ -97,11 +94,7 @@ export async function fetchMemberUnpaidDebtCount(member: string): Promise<number
   if (!REPUTATION_CONTRACT_ID) return 0;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const debts = await readContract(REPUTATION_CONTRACT_ID, "get_debts", [
-    xdr.ScVal.scvAddress(
-      xdr.ScAddress.scAddressTypeAccount(
-        Keypair.fromPublicKey(member).xdrAccountId(),
-      ),
-    ),
+    nativeToScVal(member, { type: "address" }),
   ]) as unknown[];
   if (!Array.isArray(debts)) return 0;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -118,11 +111,7 @@ export async function hasMemberContributed(
 ): Promise<boolean> {
   const result = await readContract(contractId, "has_contributed", [
     xdr.ScVal.scvU32(groupId),
-    xdr.ScVal.scvAddress(
-      xdr.ScAddress.scAddressTypeAccount(
-        Keypair.fromPublicKey(member).xdrAccountId(),
-      ),
-    ),
+    nativeToScVal(member, { type: "address" }),
   ]);
   return Boolean(result);
 }
@@ -134,15 +123,44 @@ export async function hasMemberContributed(
 /**
  * Parse the raw scValToNative output of a rotating Group struct into
  * our SavingsGroup type.
+ *
+ * scValToNative can return the enum in multiple formats depending on SDK version:
+ *   - plain string:  "Active"
+ *   - number/bigint: 1  (numeric discriminant)
+ *   - object:        { Active: undefined }  or  { tag: "Active" }
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseGroupStatus(raw: any): SavingsGroup["status"] {
-  if (!raw || typeof raw !== "object") return "forming";
-  const key = Object.keys(raw)[0]?.toLowerCase() ?? "forming";
-  if (key === "active")    return "active";
-  if (key === "completed") return "completed";
-  if (key === "cancelled") return "cancelled";
-  if (key === "matured")   return "matured";
+  const STATUS_MAP: Record<number, SavingsGroup["status"]> = {
+    0: "forming", 1: "active", 2: "completed", 3: "cancelled",
+  };
+
+  // Plain string
+  if (typeof raw === "string") {
+    const s = raw.toLowerCase();
+    if (s === "active") return "active";
+    if (s === "completed") return "completed";
+    if (s === "cancelled") return "cancelled";
+    if (s === "matured")   return "matured";
+    return "forming";
+  }
+
+  // Numeric discriminant
+  if (typeof raw === "number") return STATUS_MAP[raw] ?? "forming";
+  if (typeof raw === "bigint") return STATUS_MAP[Number(raw)] ?? "forming";
+
+  if (raw && typeof raw === "object") {
+    // Array format: ["Active"]
+    if (Array.isArray(raw)) {
+      return parseGroupStatus(raw[0]);
+    }
+    // { tag: "Active" }
+    if (typeof raw.tag === "string") return parseGroupStatus(raw.tag);
+    // { Active: undefined } — pick the first key
+    const keys = Object.keys(raw);
+    if (keys.length >= 1) return parseGroupStatus(keys[0]);
+  }
+
   return "forming";
 }
 
@@ -312,11 +330,7 @@ async function invokeContract(
  */
 export async function closeCycle(groupId: number): Promise<string> {
   return invokeContract(ROTATING_CONTRACT_ID, "close_cycle", [
-    xdr.ScVal.scvAddress(
-      xdr.ScAddress.scAddressTypeAccount(
-        Keypair.fromSecret(AGENT_KEY).xdrAccountId(),
-      ),
-    ),
+    nativeToScVal(Keypair.fromSecret(AGENT_KEY).publicKey(), { type: "address" }),
     xdr.ScVal.scvU32(groupId),
   ]);
 }
@@ -334,16 +348,8 @@ export async function flagDefault(
     : TARGET_CONTRACT_ID;
 
   return invokeContract(contractId, "flag_default", [
-    xdr.ScVal.scvAddress(
-      xdr.ScAddress.scAddressTypeAccount(
-        Keypair.fromSecret(AGENT_KEY).xdrAccountId(),
-      ),
-    ),
+    nativeToScVal(Keypair.fromSecret(AGENT_KEY).publicKey(), { type: "address" }),
     xdr.ScVal.scvU32(groupId),
-    xdr.ScVal.scvAddress(
-      xdr.ScAddress.scAddressTypeAccount(
-        Keypair.fromPublicKey(member).xdrAccountId(),
-      ),
-    ),
+    nativeToScVal(member, { type: "address" }),
   ]);
 }

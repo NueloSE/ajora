@@ -163,8 +163,9 @@ pub fn flag_default(env: &Env, group_id: u32, mut group: Group, member: &Address
     }
 
     if let Some(idx) = defaulter_idx {
-        // idx > current_cycle means their slot is in a future cycle (not yet paid)
-        if idx > group.current_cycle {
+        // idx >= current_cycle: demote if their payout slot is this cycle or later
+        // (a member who defaults in their own payout cycle should not receive the payout)
+        if idx >= group.current_cycle {
             let last_pos = group.payout_order.len() - 1;
             group.payout_order = move_to_last(env, &group.payout_order, idx);
             save_group(env, group_id, &group);
