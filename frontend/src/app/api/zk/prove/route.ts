@@ -161,6 +161,9 @@ function bufToHex(buf: Uint8Array): string {
   return Array.from(buf).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+// BN254 scalar field modulus — Fr values must be strictly less than this
+const BN254_MODULUS = BigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
+
 async function computeCommitment(
   walletAddress: string,
   cyclesCompleted: number,
@@ -174,8 +177,12 @@ async function computeCommitment(
     walletBytes = StrKey.decodeEd25519PublicKey(walletAddress);
   }
 
+  // Stellar addresses are arbitrary 32-byte values — some exceed the BN254
+  // field modulus. Reduce mod the modulus so the value is always a valid Fr.
+  const walletBigInt = BigInt("0x" + bufToHex(walletBytes)) % BN254_MODULUS;
+
   const bb       = await Barretenberg.new({ threads: 1 });
-  const walletFr = new Fr(walletBytes);
+  const walletFr = new Fr(walletBigInt);
   const cyclesFr = new Fr(BigInt(cyclesCompleted));
   const commitFr = await bb.pedersenHash([walletFr, cyclesFr], 0);
   await bb.destroy();
