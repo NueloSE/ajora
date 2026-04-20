@@ -38,7 +38,9 @@ const NETWORK       = process.env.NETWORK_PASSPHRASE       ?? Networks.TESTNET;
 // Paths — Railway sets HOME, binaries will be installed via nixpacks
 const NARGO_BIN   = process.env.NARGO_BIN   ?? `${process.env.HOME}/.nargo/bin/nargo`;
 const BB_BIN      = process.env.BB_BIN      ?? `${process.env.HOME}/.bb/bin/bb`;
-const CIRCUIT_DIR = process.env.CIRCUIT_DIR ?? join(__dirname, "..", "..", "circuits", "ajora_credit");
+// Default: circuits/ lives inside the zk-server package (copied at deploy time)
+// so __dirname (dist/) → ../ (zk-server root) → circuits/ajora_credit
+const CIRCUIT_DIR = process.env.CIRCUIT_DIR ?? join(__dirname, "..", "circuits", "ajora_credit");
 
 // Funded testnet account used only for read-only simulations
 const SIM_ACCOUNT = "GC3BYGUYPLUFX3PGUQ4SWWPHLAGRNTJ7F35KWFKXNVKVUUAMNOP5SU6Y";
