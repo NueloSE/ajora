@@ -39,6 +39,7 @@ export default function GroupsPage() {
   const [submitting,  setSubmitting]  = useState(false);
 
   const [groupNames, setGroupNames] = useState<Record<number, string>>({});
+  const [paidKeys,   setPaidKeys]   = useState<Set<string>>(new Set());
 
   const [form, setForm] = useState({
     name: "", amount: "10", members: "4", cycleDays: "30", minScore: "0",
@@ -65,6 +66,14 @@ export default function GroupsPage() {
 
   useEffect(() => { loadGroups(); }, [loadGroups]);
   useEffect(() => { fetchGroupNames().then(setGroupNames).catch(() => {}); }, []);
+
+  // Load paid contribution keys from localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("ajora_contributions");
+      if (raw) setPaidKeys(new Set(JSON.parse(raw) as string[]));
+    } catch { /* ignore */ }
+  }, []);
 
   // Auto-open join modal when ?join=X is in the URL (from a share link).
   // Fetches the specific group directly so it doesn't depend on the full list loading.
@@ -130,13 +139,21 @@ export default function GroupsPage() {
       const refreshed = await fetchAllGroups();
       setGroups(refreshed);
       setLoading(false);
+      const newId = refreshed.length > 0 ? refreshed[refreshed.length - 1].id : 1;
       // Save name to Supabase so all users see it
       if (form.name.trim()) {
-        const newId = refreshed.length > 0 ? refreshed[refreshed.length - 1].id : 1;
         await saveGroupNameRemote(newId, form.name.trim());
         const updatedNames = await fetchGroupNames();
         setGroupNames(updatedNames);
         setForm(f => ({ ...f, name: "" }));
+      }
+      // Auto-join: creator should be a member of their own group
+      try {
+        await joinGroup(address, newId);
+        const afterJoin = await fetchAllGroups();
+        setGroups(afterJoin);
+      } catch {
+        // Non-fatal — creator may already be a member or group may not support it
       }
     } catch (e) {
       setTxError(e instanceof Error ? e.message : String(e));
@@ -218,6 +235,17 @@ export default function GroupsPage() {
       }
       const hash = await contribute(address, groupId);
       setTxHash(hash);
+      // Mark this cycle as paid in localStorage for the indicator
+      const group = groups.find(g => g.id === groupId);
+      if (group) {
+        const key = `${groupId}_${group.current_cycle}_${address}`;
+        setPaidKeys(prev => {
+          const next = new Set(prev);
+          next.add(key);
+          try { localStorage.setItem("ajora_contributions", JSON.stringify([...next])); } catch { /* ignore */ }
+          return next;
+        });
+      }
       await loadGroups();
     } catch (e) {
       setTxError(e instanceof Error ? e.message : String(e));
@@ -303,6 +331,7 @@ export default function GroupsPage() {
               group={g}
               groupName={groupNames[g.id] ?? null}
               myAddress={address}
+              paidKeys={paidKeys}
               onJoin={() => openJoinModal(g)}
               onContribute={() => handleContribute(g.id, g.contribution_amount)}
             />
@@ -586,10 +615,11 @@ export default function GroupsPage() {
   );
 }
 
-function GroupCard({ group, groupName, myAddress, onJoin, onContribute }: {
+function GroupCard({ group, groupName, myAddress, paidKeys, onJoin, onContribute }: {
   group: OnChainGroup;
   groupName: string | null;
   myAddress: string | null;
+  paidKeys: Set<string>;
   onJoin: () => void;
   onContribute: () => void;
 }) {
@@ -620,6 +650,11 @@ function GroupCard({ group, groupName, myAddress, onJoin, onContribute }: {
   const currentRecipient = group.status === "Active" && group.payout_order.length > 0
     ? group.payout_order[group.current_cycle - 1] ?? null
     : null;
+
+  // Has the current user already contributed this cycle?
+  const hasPaid = myAddress
+    ? paidKeys.has(`${group.id}_${group.current_cycle}_${myAddress}`)
+    : false;
 
   return (
     <div style={{
@@ -768,14 +803,28 @@ function GroupCard({ group, groupName, myAddress, onJoin, onContribute }: {
             <span style={{ fontSize: 12, color: "var(--ink-muted)" }}>Full — activating soon</span>
           )}
           {group.status === "Active" && isMember && (
-            <button onClick={onContribute} style={{
-              padding: "9px 20px",
-              background: "var(--green)", color: "#fff",
-              border: "none", borderRadius: 8,
-              fontSize: 13, fontWeight: 600, cursor: "pointer",
-            }}>
-              Contribute →
-            </button>
+            hasPaid ? (
+              <span style={{
+                padding: "9px 16px",
+                background: "rgba(11,61,46,0.09)", border: "1.5px solid rgba(11,61,46,0.25)",
+                borderRadius: 8, fontSize: 13, fontWeight: 700,
+                color: "var(--green)", display: "flex", alignItems: "center", gap: 6,
+              }}>
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                  <path d="M2 6.5L5.5 10L11 3" stroke="var(--green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Paid cycle {group.current_cycle}
+              </span>
+            ) : (
+              <button onClick={onContribute} style={{
+                padding: "9px 20px",
+                background: "var(--green)", color: "#fff",
+                border: "none", borderRadius: 8,
+                fontSize: 13, fontWeight: 600, cursor: "pointer",
+              }}>
+                Contribute →
+              </button>
+            )
           )}
         </div>
       </div>
