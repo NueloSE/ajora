@@ -313,6 +313,26 @@ export async function fetchReputationData(address: string): Promise<ReputationDa
 const KALEPAIL_PK = "GC2C7AWLS2FMFTQAHW3IBUB4ZXVP4E37XNLEF2IK7IVXBB6CMEPCSXFO";
 
 /**
+ * Check whether a member has a valid ZK credit proof for a given group.
+ * Calls `check_credit` on the ZK verifier contract.
+ * Returns true if the member has a Valid proof record with cycles_claimed >= minCycles.
+ */
+export async function checkCredit(
+  member:    string,
+  groupId:   number,
+  minCycles: number = 1,
+): Promise<boolean> {
+  if (!ZK_ID || !member) return false;
+  const result = await simulate(ZK_ID, "check_credit", [
+    nativeToScVal(SIM_ACCOUNT, { type: "address" }),  // checker (simulation account)
+    nativeToScVal(member,      { type: "address" }),
+    xdr.ScVal.scvU32(groupId),
+    xdr.ScVal.scvU32(minCycles),
+  ]);
+  return Boolean(result);
+}
+
+/**
  * Check whether a smart wallet address has a ZK proof commitment recorded
  * on Stellar testnet.
  *

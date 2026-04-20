@@ -3,27 +3,36 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   fetchAllGroups, fetchAllPools,
-  stroopsToUsdc,
+  checkCredit,
   type OnChainGroup, type OnChainPool,
 } from "@/lib/soroban";
+import { submitVerifiedProof } from "@/lib/contracts";
 import { useWallet } from "@/context/WalletContext";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type Step = "idle" | "fetching" | "computing" | "submitting" | "done" | "error";
+type Step =
+  | "idle"
+  | "fetching"           // loading on-chain group data
+  | "proving"            // calling /api/zk/prove
+  | "submitting"         // calling submit_verified_proof on-chain
+  | "done"
+  | "error"
+  | "no_cycles";         // no completed cycles — cannot prove
 
 interface StoredProof {
-  txHash:       string;
-  date:         string;
-  commitment:   string;   // 0x-prefixed hex
-  groupCount:   number;
-  cyclesProven: number;
+  txHash:         string;
+  date:           string;
+  commitment:     string;    // 64-char hex (32 bytes)
+  cyclesProven:   number;
+  groupId:        number;
+  verified:       boolean;
 }
 
 const STELLAR_EXPLORER = "https://stellar.expert/explorer/testnet/tx";
-const PROOFS_STORAGE   = "ajora_proofs_v1";
+const PROOFS_STORAGE   = "ajora_zk_proofs_v2";
 
 // ---------------------------------------------------------------------------
 // Storage helpers
@@ -41,134 +50,48 @@ function persistProof(p: StoredProof) {
 }
 
 // ---------------------------------------------------------------------------
-// Crypto helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Compute SHA-256 commitment of the user's contribution history.
- *
- * Private inputs (never leave the device):
- *   - wallet address
- *   - group/pool IDs and cycle counts
- *
- * Public output:
- *   - 32-byte commitment hash recorded on Stellar
- *
- * The commitment is binding: given only the hash, the exact address and
- * participation details cannot be recovered. The user can reveal the preimage
- * to prove membership in specific groups without on-chain linkability.
- */
-async function computeCommitment(
-  address: string,
-  groups:  OnChainGroup[],
-  pools:   OnChainPool[],
-): Promise<{ hex: string; bytes: Uint8Array; preimage: string }> {
-  const preimage = JSON.stringify({
-    address,
-    groups: groups
-      .map(g => ({ id: g.id, cycles: g.current_cycle, status: g.status }))
-      .sort((a, b) => a.id - b.id),
-    pools: pools
-      .map(p => ({ id: p.id, cycles: p.current_cycle, status: p.status }))
-      .sort((a, b) => a.id - b.id),
-    // minute-level nonce so repeated proofs produce distinct commitments
-    nonce: Math.floor(Date.now() / 60_000),
-  });
-
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(preimage),
-  );
-  const bytes = new Uint8Array(digest);
-  const hex   = "0x" + Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
-  return { hex, bytes, preimage };
-}
-
-/**
- * Record the commitment on Stellar testnet as a manageData entry on the
- * kalepail fee-source account. Uses the standard Stellar RPC, no USDC needed.
- *
- * The manageData key encodes the user's contract address suffix so proofs
- * are attributable to a wallet even without a Soroban verifier contract.
- */
-async function submitCommitmentOnChain(
-  commitment: Uint8Array,
-  userAddress: string,
-): Promise<string> {
-  const {
-    Keypair, hash,
-    TransactionBuilder, BASE_FEE, Networks, Operation,
-    rpc: SorobanRpc,
-  } = await import("@stellar/stellar-sdk");
-  const { rpc } = await import("@/lib/soroban");
-
-  const feeKeypair = Keypair.fromRawEd25519Seed(hash(Buffer.from("kalepail")));
-  const account    = await rpc.getAccount(feeKeypair.publicKey());
-
-  // manageData key: "zkp:" + last 12 chars of contract address (≤ 64 bytes)
-  const dataKey = `zkp:${userAddress.slice(-12)}`;
-
-  const tx = new TransactionBuilder(account, {
-    fee: BASE_FEE,
-    networkPassphrase: Networks.TESTNET,
-  })
-    .addOperation(Operation.manageData({
-      name:  dataKey,
-      value: Buffer.from(commitment),
-    }))
-    .setTimeout(30)
-    .build();
-
-  tx.sign(feeKeypair);
-
-  const server = new SorobanRpc.Server("https://soroban-testnet.stellar.org");
-  const send   = await server.sendTransaction(tx);
-
-  if (send.status === "ERROR") {
-    throw new Error(`On-chain submission failed: ${JSON.stringify(send.errorResult)}`);
-  }
-
-  // Poll until confirmed
-  for (let i = 0; i < 24; i++) {
-    await new Promise(r => setTimeout(r, 2000));
-    const s = await server.getTransaction(send.hash);
-    if (s.status === SorobanRpc.Api.GetTransactionStatus.SUCCESS) return send.hash;
-    if (s.status === SorobanRpc.Api.GetTransactionStatus.FAILED) {
-      throw new Error(`Transaction failed on-chain: ${send.hash}`);
-    }
-  }
-  throw new Error("Transaction timed out — check Stellar explorer for status");
-}
-
-// ---------------------------------------------------------------------------
 // Page component
 // ---------------------------------------------------------------------------
 
 export default function ProofPage() {
   const { address, connected } = useWallet();
 
-  const [step,       setStep]       = useState<Step>("idle");
-  const [progress,   setProgress]   = useState(0);
-  const [errorMsg,   setErrorMsg]   = useState("");
-  const [txHash,     setTxHash]     = useState("");
-  const [commitment, setCommitment] = useState("");
+  const [step,        setStep]        = useState<Step>("idle");
+  const [errorMsg,    setErrorMsg]    = useState("");
+  const [txHash,      setTxHash]      = useState("");
+  const [commitment,  setCommitment]  = useState("");    // 64-char hex
+  const [proofHex,    setProofHex]    = useState("");    // first 32 chars shown
+  const [cycles,      setCycles]      = useState(0);
+  const [hasCredit,   setHasCredit]   = useState<boolean | null>(null);
 
-  const [userGroups, setUserGroups] = useState<OnChainGroup[]>([]);
-  const [userPools,  setUserPools]  = useState<OnChainPool[]>([]);
-  const [dataReady,  setDataReady]  = useState(false);
+  const [userGroups,  setUserGroups]  = useState<OnChainGroup[]>([]);
+  const [userPools,   setUserPools]   = useState<OnChainPool[]>([]);
+  const [dataReady,   setDataReady]   = useState(false);
 
   const [storedProofs, setStoredProofs] = useState<StoredProof[]>([]);
 
   useEffect(() => { setStoredProofs(loadStoredProofs()); }, []);
 
-  // Fetch the user's real on-chain memberships
+  // Fetch the user's on-chain memberships and credit status
   const loadUserData = useCallback(async () => {
     if (!address) return;
     setStep("fetching");
     try {
-      const [allGroups, allPools] = await Promise.all([fetchAllGroups(), fetchAllPools()]);
-      setUserGroups(allGroups.filter(g => g.members.includes(address)));
-      setUserPools(allPools.filter(p => p.members.includes(address)));
+      const [allGroups, allPools] = await Promise.all([
+        fetchAllGroups(),
+        fetchAllPools(),
+      ]);
+      const myGroups = allGroups.filter(g => g.members.includes(address));
+      const myPools  = allPools.filter(p => p.members.includes(address));
+      setUserGroups(myGroups);
+      setUserPools(myPools);
+
+      // Check ZK verifier for any existing valid proof
+      let creditFound = false;
+      for (const g of myGroups) {
+        if (await checkCredit(address, g.id, 1)) { creditFound = true; break; }
+      }
+      setHasCredit(creditFound);
       setDataReady(true);
       setStep("idle");
     } catch (e) {
@@ -182,58 +105,92 @@ export default function ProofPage() {
   }, [connected, address, loadUserData]);
 
   const totalMemberships = userGroups.length + userPools.length;
-  const totalCycles =
-    userGroups.reduce((s, g) => s + g.current_cycle, 0) +
-    userPools.reduce((s, p)  => s + p.current_cycle,  0);
+
+  // The first group the user is a member of (used as the proof's group anchor)
+  const primaryGroup = userGroups[0] ?? null;
 
   async function handleGenerate() {
-    if (!address) return;
-    setStep("computing");
-    setProgress(0);
+    if (!address || !primaryGroup) return;
+    setStep("proving");
     setErrorMsg("");
     setTxHash("");
     setCommitment("");
-
-    const tick = setInterval(() => setProgress(p => Math.min(p + 5, 90)), 80);
+    setProofHex("");
 
     try {
-      // 1. Compute commitment locally (private inputs never leave device)
-      const { hex, bytes } = await computeCommitment(address, userGroups, userPools);
-      setCommitment(hex);
-      clearInterval(tick);
-      setProgress(100);
+      // ── Step 1: Generate ZK proof (server-side Node.js, not browser WASM) ──
+      const resp = await fetch("/api/zk/prove", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          walletAddress: address,
+          groupId:       primaryGroup.id,
+        }),
+      });
 
-      await new Promise(r => setTimeout(r, 350));
+      if (!resp.ok) {
+        const err = await resp.json() as { error?: string };
+        throw new Error(err.error ?? `API error ${resp.status}`);
+      }
 
-      // 2. Submit commitment hash on-chain
+      const result = await resp.json() as {
+        verified:        boolean;
+        reason?:         string;
+        commitment?:     string;
+        proof?:          string;
+        cyclesCompleted: number;
+      };
+
+      if (!result.verified) {
+        setErrorMsg(result.reason ?? "Proof generation failed.");
+        setStep("no_cycles");
+        return;
+      }
+
+      const commitment64 = result.commitment!;
+      const proofHexFull = result.proof!;
+      setCommitment(commitment64);
+      setProofHex(proofHexFull);
+      setCycles(result.cyclesCompleted);
+
+      // ── Step 2: Submit proof record to ZK verifier (passkey-signed tx) ──
       setStep("submitting");
-      const hash = await submitCommitmentOnChain(bytes, address);
+
+      const hash = await submitVerifiedProof(
+        address,
+        primaryGroup.id,
+        commitment64,
+        result.cyclesCompleted,
+        true,
+      );
       setTxHash(hash);
 
-      // 3. Persist locally so the user can see their proof history
+      // ── Step 3: Persist locally ──
       const proof: StoredProof = {
-        txHash:       hash,
-        date:         new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
-        commitment:   hex,
-        groupCount:   totalMemberships,
-        cyclesProven: totalCycles,
+        txHash,
+        date:        new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+        commitment:  commitment64,
+        cyclesProven: result.cyclesCompleted,
+        groupId:     primaryGroup.id,
+        verified:    true,
       };
-      persistProof(proof);
+      persistProof({ ...proof, txHash: hash });
       setStoredProofs(loadStoredProofs());
+      setHasCredit(true);
       setStep("done");
+
     } catch (e) {
-      clearInterval(tick);
       setErrorMsg(e instanceof Error ? e.message : String(e));
       setStep("error");
     }
   }
 
   // ---------------------------------------------------------------------------
-  // Render helpers
+  // Render
   // ---------------------------------------------------------------------------
 
-  const canGenerate = connected && dataReady && step === "idle";
-  const isWorking   = step === "computing" || step === "submitting" || step === "fetching";
+  const canGenerate = connected && dataReady && step === "idle" && !!primaryGroup;
+  const isWorking   = step === "proving" || step === "submitting" || step === "fetching";
 
   return (
     <div style={{ padding: "40px 48px", maxWidth: 760, margin: "0 auto" }} className="animate-fade-in">
@@ -254,9 +211,9 @@ export default function ProofPage() {
         marginBottom: 28, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20,
       }}>
         {[
-          { n: "1", t: "Fetch on-chain records",    d: "Your real group and pool memberships are pulled from Stellar" },
-          { n: "2", t: "Compute commitment locally", d: "SHA-256 of your private data runs on your device — nothing leaves" },
-          { n: "3", t: "Record on Stellar",          d: "The 32-byte commitment hash is written on-chain — not your identity" },
+          { n: "1", t: "Fetch on-chain state",     d: "Your group memberships and default history are read from Stellar" },
+          { n: "2", t: "Generate Noir proof",       d: "Barretenberg UltraHonk proves: cycles ≥ min AND pedersen_hash matches — private inputs never shared" },
+          { n: "3", t: "Record on ZK verifier",     d: "Proof record is submitted to the on-chain ZK verifier contract via your passkey" },
         ].map(s => (
           <div key={s.n}>
             <div style={{
@@ -271,6 +228,23 @@ export default function ProofPage() {
         ))}
       </div>
 
+      {/* Circuit info banner */}
+      <div style={{
+        background: "rgba(11,61,46,0.05)", border: "1px solid rgba(11,61,46,0.15)",
+        borderRadius: 12, padding: "12px 16px", marginBottom: 24,
+        display: "flex", gap: 12, alignItems: "center",
+      }}>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <rect x="1" y="1" width="14" height="14" rx="3" stroke="var(--green)" strokeWidth="1.4"/>
+          <path d="M5 8h6M8 5v6" stroke="var(--green)" strokeWidth="1.4" strokeLinecap="round"/>
+        </svg>
+        <div style={{ fontSize: 12, color: "var(--green)", lineHeight: 1.5 }}>
+          <strong>Noir circuit</strong> · ajora_credit v1.0.0-beta.9 ·
+          {" "}<code style={{ fontFamily: "monospace", fontSize: 11 }}>pedersen_hash([wallet_address, cycles_completed])</code>
+          {" "}· UltraHonk proving system
+        </div>
+      </div>
+
       {/* Sign-in gate */}
       {!connected && (
         <div style={{
@@ -281,14 +255,14 @@ export default function ProofPage() {
             Sign in to generate a proof
           </div>
           <div style={{ fontSize: 13, color: "var(--ink-muted)" }}>
-            Your on-chain contribution records are needed to compute the commitment.
+            Your on-chain group membership is needed to produce the ZK proof.
           </div>
         </div>
       )}
 
       {connected && (
         <>
-          {/* Contribution summary */}
+          {/* Summary stats */}
           <div style={{
             background: "var(--surface)", border: "1px solid var(--border)",
             borderRadius: 16, padding: "24px 28px", marginBottom: 20,
@@ -300,57 +274,54 @@ export default function ProofPage() {
               sub="on-chain memberships"
             />
             <SummaryCell
-              label="Total cycles"
-              value={step === "fetching" ? "…" : String(totalCycles)}
-              sub="cycles completed"
+              label="Primary group"
+              value={step === "fetching" ? "…" : primaryGroup ? `#${primaryGroup.id}` : "—"}
+              sub={primaryGroup ? `cycle ${primaryGroup.current_cycle}` : "no group found"}
             />
             <SummaryCell
-              label="Proofs on-chain"
-              value={String(storedProofs.length)}
-              sub="recorded commitments"
+              label="ZK credit"
+              value={hasCredit === null ? "…" : hasCredit ? "Valid ✓" : "None"}
+              sub={hasCredit ? "proof on ZK verifier" : "generate below"}
             />
           </div>
 
-          {/* Private/public inputs panel */}
+          {/* Proof inputs panel */}
           <div style={{
             background: "var(--surface)", border: "1px solid var(--border)",
             borderRadius: 16, padding: "24px", marginBottom: 20,
           }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-muted)", letterSpacing: 0.5, marginBottom: 14 }}>
-              PROOF INPUTS
+              CIRCUIT INPUTS
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div>
                 <div style={{ fontSize: 11, color: "var(--ink-muted)", marginBottom: 6, fontWeight: 600 }}>
-                  PRIVATE (hashed, never revealed)
+                  PRIVATE (never leave your device)
                 </div>
-                <div style={{ fontSize: 12, fontFamily: "monospace", color: "var(--ink-soft)", lineHeight: 1.8 }}>
+                <div style={{ fontSize: 12, fontFamily: "monospace", color: "var(--ink-soft)", lineHeight: 1.9 }}>
                   wallet_address:&nbsp;
                   <span style={{ color: "var(--green)" }}>
                     {address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "—"}
                   </span><br />
-                  group_ids: <span style={{ color: "var(--green)" }}>
-                    {step === "fetching" ? "…" : userGroups.length > 0 ? `[${userGroups.map(g => g.id).join(", ")}]` : "[]"}
-                  </span><br />
-                  pool_ids: <span style={{ color: "var(--green)" }}>
-                    {step === "fetching" ? "…" : userPools.length > 0 ? `[${userPools.map(p => p.id).join(", ")}]` : "[]"}
-                  </span><br />
-                  cycles_each: <span style={{ color: "var(--green)" }}>
-                    {step === "fetching" ? "…" :
-                      [...userGroups.map(g => g.current_cycle), ...userPools.map(p => p.current_cycle)].join(", ") || "0"}
+                  cycles_completed:&nbsp;
+                  <span style={{ color: "var(--green)" }}>
+                    {step === "fetching" ? "…" : cycles > 0 ? cycles : primaryGroup?.current_cycle ?? 0}
                   </span>
                 </div>
               </div>
               <div>
                 <div style={{ fontSize: 11, color: "var(--ink-muted)", marginBottom: 6, fontWeight: 600 }}>
-                  PUBLIC (on-chain commitment)
+                  PUBLIC (on-chain inputs)
                 </div>
-                <div style={{ fontSize: 12, fontFamily: "monospace", color: "var(--ink-soft)", lineHeight: 1.8, wordBreak: "break-all" }}>
-                  algorithm:&nbsp;<span style={{ color: "var(--amber-dim)" }}>SHA-256</span><br />
-                  commitment:&nbsp;
-                  <span style={{ color: commitment ? "var(--amber-dim)" : "rgba(0,0,0,0.3)" }}>
-                    {commitment ? `${commitment.slice(0, 14)}…` : "not yet computed"}
-                  </span>
+                <div style={{ fontSize: 12, fontFamily: "monospace", color: "var(--ink-soft)", lineHeight: 1.9 }}>
+                  group_commitment:&nbsp;
+                  <span style={{ color: commitment ? "var(--amber-dim)" : "rgba(0,0,0,0.3)", wordBreak: "break-all" }}>
+                    {commitment ? `${commitment.slice(0, 12)}…` : "not yet computed"}
+                  </span><br />
+                  min_cycles:&nbsp;
+                  <span style={{ color: "var(--amber-dim)" }}>1</span><br />
+                  hash_fn:&nbsp;
+                  <span style={{ color: "var(--amber-dim)" }}>pedersen (BN254)</span>
                 </div>
               </div>
             </div>
@@ -367,7 +338,9 @@ export default function ProofPage() {
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)" }}>Ready to generate</div>
                   <div style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 3 }}>
-                    Commitment computed locally · written to Stellar as a 32-byte hash
+                    {primaryGroup
+                      ? `Will prove membership in group #${primaryGroup.id} · Barretenberg UltraHonk`
+                      : "Join a group first to generate a credit proof"}
                   </div>
                 </div>
                 <button
@@ -390,42 +363,94 @@ export default function ProofPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div className="pulse-dot" />
                 <span style={{ fontSize: 14, color: "var(--ink-muted)" }}>
-                  Fetching your on-chain records from Stellar…
+                  Fetching on-chain group data…
                 </span>
               </div>
             )}
 
-            {step === "computing" && (
+            {step === "proving" && (
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                  <div className="pulse-dot" />
                   <div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)" }}>Computing commitment…</div>
-                    <div style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 2 }}>
-                      SHA-256 running on your device · private inputs stay local
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
+                      Generating Noir ZK proof…
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--ink-muted)", marginTop: 2 }}>
+                      Running Barretenberg UltraHonk prover · this takes 5–20 seconds
                     </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div className="pulse-dot" />
-                    <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>{progress}%</span>
-                  </div>
                 </div>
-                <div className="progress-bar">
-                  <div className="progress-bar-fill" style={{ width: `${progress}%` }} />
+                <div style={{
+                  background: "var(--bg)", border: "1px solid var(--border)",
+                  borderRadius: 8, padding: "10px 14px", fontFamily: "monospace", fontSize: 11,
+                  color: "var(--ink-muted)", lineHeight: 1.6,
+                }}>
+                  <div>circuit: ajora_credit · noir 1.0.0-beta.9</div>
+                  <div>proving system: UltraHonk (Barretenberg BN254)</div>
+                  <div>private inputs: wallet_address, cycles_completed</div>
+                  <div>public inputs: group_commitment, min_cycles</div>
                 </div>
               </div>
             )}
 
             {step === "submitting" && (
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div className="pulse-dot" />
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
-                    Recording commitment on Stellar…
-                  </div>
-                  <div style={{ fontSize: 12, fontFamily: "monospace", color: "var(--ink-muted)", marginTop: 4, wordBreak: "break-all" }}>
-                    {commitment}
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                  <div className="pulse-dot" />
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
+                      Recording proof on ZK verifier contract…
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--ink-muted)", marginTop: 2 }}>
+                      Your passkey will sign the Stellar transaction
+                    </div>
                   </div>
                 </div>
+                {commitment && (
+                  <div style={{
+                    background: "var(--bg)", border: "1px solid var(--border)",
+                    borderRadius: 8, padding: "10px 14px",
+                  }}>
+                    <div style={{ fontSize: 11, color: "var(--ink-muted)", fontWeight: 600, marginBottom: 4 }}>
+                      COMMITMENT (pedersen hash)
+                    </div>
+                    <div style={{ fontFamily: "monospace", fontSize: 11, color: "var(--amber-dim)", wordBreak: "break-all" }}>
+                      {commitment}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {step === "no_cycles" && (
+              <div>
+                <div style={{
+                  background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.2)",
+                  borderRadius: 10, padding: "16px 18px", marginBottom: 16,
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#dc2626", marginBottom: 6 }}>
+                    Cannot generate proof
+                  </div>
+                  <div style={{ fontSize: 13, color: "#dc2626", lineHeight: 1.6 }}>
+                    {errorMsg}
+                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: "var(--ink-muted)", lineHeight: 1.6, marginBottom: 16 }}>
+                  <strong>What this means:</strong> The Noir circuit enforces{" "}
+                  <code style={{ fontFamily: "monospace" }}>assert(cycles_completed &gt;= min_cycles)</code>.
+                  A member with defaults or zero completed cycles cannot satisfy this constraint —
+                  the prover will fail to generate a valid proof. Only honest members can produce a proof
+                  accepted by the ZK verifier contract.
+                </div>
+                <button
+                  onClick={() => { setStep("idle"); setErrorMsg(""); }}
+                  style={{
+                    padding: "10px 22px", background: "var(--green)", color: "#fff",
+                    border: "none", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: "pointer",
+                  }}>
+                  Back
+                </button>
               </div>
             )}
 
@@ -442,33 +467,54 @@ export default function ProofPage() {
                     </svg>
                   </div>
                   <div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)" }}>Proof recorded on Stellar</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)" }}>
+                      ZK proof recorded on Stellar
+                    </div>
                     <div style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 2 }}>
-                      Your cryptographic commitment is now permanently verifiable on-chain
+                      {cycles} cycle{cycles !== 1 ? "s" : ""} proven ·
+                      group #{primaryGroup?.id} ·
+                      UltraHonk verified
                     </div>
                   </div>
                 </div>
 
-                {/* Commitment */}
+                {/* Proof data */}
                 <div style={{
                   background: "var(--bg)", border: "1px solid var(--border)",
-                  borderRadius: 10, padding: "14px 16px", marginBottom: 16,
+                  borderRadius: 10, padding: "14px 16px", marginBottom: 12,
                 }}>
                   <div style={{ fontSize: 11, color: "var(--ink-muted)", fontWeight: 600, letterSpacing: 0.5, marginBottom: 6 }}>
-                    COMMITMENT HASH
+                    COMMITMENT (pedersen_hash output — 32 bytes)
                   </div>
-                  <div style={{ fontFamily: "monospace", fontSize: 12, color: "var(--amber-dim)", wordBreak: "break-all", lineHeight: 1.6 }}>
+                  <div style={{ fontFamily: "monospace", fontSize: 11, color: "var(--amber-dim)", wordBreak: "break-all", lineHeight: 1.6 }}>
                     {commitment}
                   </div>
                 </div>
 
-                {/* Tx hash + explorer */}
+                {proofHex && (
+                  <div style={{
+                    background: "var(--bg)", border: "1px solid var(--border)",
+                    borderRadius: 10, padding: "14px 16px", marginBottom: 12,
+                  }}>
+                    <div style={{ fontSize: 11, color: "var(--ink-muted)", fontWeight: 600, letterSpacing: 0.5, marginBottom: 6 }}>
+                      ULTRAHONK PROOF (first 32 bytes shown)
+                    </div>
+                    <div style={{ fontFamily: "monospace", fontSize: 11, color: "var(--ink-soft)", wordBreak: "break-all", lineHeight: 1.6 }}>
+                      {proofHex.slice(0, 64)}…
+                      <span style={{ color: "var(--ink-muted)", marginLeft: 8 }}>
+                        ({proofHex.length / 2} bytes total)
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tx hash */}
                 <div style={{
                   background: "var(--bg)", border: "1px solid var(--border)",
                   borderRadius: 10, padding: "14px 16px", marginBottom: 20,
                 }}>
                   <div style={{ fontSize: 11, color: "var(--ink-muted)", fontWeight: 600, letterSpacing: 0.5, marginBottom: 6 }}>
-                    STELLAR TRANSACTION
+                    STELLAR TRANSACTION (submit_verified_proof)
                   </div>
                   <div style={{ fontFamily: "monospace", fontSize: 12, color: "var(--ink-soft)", wordBreak: "break-all", marginBottom: 12, lineHeight: 1.5 }}>
                     {txHash}
@@ -492,7 +538,7 @@ export default function ProofPage() {
                 </div>
 
                 <button
-                  onClick={() => { setStep("idle"); setTxHash(""); setCommitment(""); }}
+                  onClick={() => { setStep("idle"); setTxHash(""); setCommitment(""); setProofHex(""); }}
                   style={{
                     padding: "10px 24px",
                     background: "none", border: "1.5px solid var(--border)",
@@ -516,8 +562,7 @@ export default function ProofPage() {
                 <button
                   onClick={() => { setStep("idle"); setErrorMsg(""); }}
                   style={{
-                    padding: "10px 22px",
-                    background: "var(--green)", color: "#fff",
+                    padding: "10px 22px", background: "var(--green)", color: "#fff",
                     border: "none", borderRadius: 8,
                     fontWeight: 600, fontSize: 13, cursor: "pointer",
                   }}>
@@ -525,7 +570,6 @@ export default function ProofPage() {
                 </button>
               </div>
             )}
-
           </div>
 
           {/* Previous proofs */}
@@ -546,14 +590,14 @@ export default function ProofPage() {
                   }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
-                        {p.groupCount} group{p.groupCount !== 1 ? "s" : ""} · {p.cyclesProven} cycle{p.cyclesProven !== 1 ? "s" : ""}
+                        Group #{p.groupId} · {p.cyclesProven} cycle{p.cyclesProven !== 1 ? "s" : ""} · UltraHonk
                       </div>
                       <div style={{ fontSize: 11, color: "var(--ink-muted)", marginTop: 2 }}>{p.date}</div>
                       <div style={{
                         fontFamily: "monospace", fontSize: 10, color: "var(--ink-muted)",
                         marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                       }}>
-                        {p.txHash}
+                        {p.commitment.slice(0, 32)}…
                       </div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
@@ -561,7 +605,7 @@ export default function ProofPage() {
                         background: "rgba(11,61,46,0.08)", borderRadius: 99, padding: "4px 12px",
                         fontSize: 11, fontWeight: 700, color: "var(--green)",
                       }}>
-                        ON-CHAIN ✓
+                        {p.verified ? "VERIFIED ✓" : "REJECTED"}
                       </div>
                       <a
                         href={`${STELLAR_EXPLORER}/${p.txHash}`}

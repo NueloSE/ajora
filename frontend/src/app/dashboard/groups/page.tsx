@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { fetchAllGroups, fetchUsdcBalance, hasZkProofOnChain, type OnChainGroup, stroopsToUsdc, REPUTATION_ID } from "@/lib/soroban";
+import { fetchAllGroups, fetchUsdcBalance, checkCredit, type OnChainGroup, stroopsToUsdc, REPUTATION_ID } from "@/lib/soroban";
 import { createGroup, joinGroup, contribute } from "@/lib/contracts";
 import { useWallet } from "@/context/WalletContext";
 import { saveGroupName as saveGroupNameRemote, fetchGroupNames } from "@/lib/registry";
@@ -181,7 +181,12 @@ export default function GroupsPage() {
       );
 
       if (hasPriorGroups) {
-        const hasProof = await hasZkProofOnChain(address);
+        // Check ZK verifier contract: member must have a valid proof for at least one prior group
+        const priorGroups = groups.filter(g => g.id !== group.id && g.members.includes(address));
+        let hasProof = false;
+        for (const pg of priorGroups) {
+          if (await checkCredit(address, pg.id, 1)) { hasProof = true; break; }
+        }
         if (!hasProof) {
           setZkBlocked(true);
           setZkChecking(false);

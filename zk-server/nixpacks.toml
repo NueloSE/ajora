@@ -1,0 +1,21 @@
+# Railway nixpacks config for the ZK proof server.
+# Installs nargo (Noir) and bb (Barretenberg) before the app starts.
+
+[phases.setup]
+nixPkgs = ["curl", "bash", "gzip", "nodejs_20"]
+
+[phases.install]
+cmds = [
+  # Install nargo 1.0.0-beta.9 (matches the compiled circuit)
+  "curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash",
+  "~/.nargo/bin/noirup -v 1.0.0-beta.9",
+  # Install bb 0.87.1 (the version nargo 1.0.0-beta.9 requires)
+  "curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/master/barretenberg/cpp/installation/install | bash -s -- 0.87.1",
+  "npm ci",
+]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "npm start"

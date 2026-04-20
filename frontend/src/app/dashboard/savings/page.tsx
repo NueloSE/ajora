@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   fetchAllPools, fetchAllGroups, fetchUsdcBalance,
-  hasZkProofOnChain,
+  checkCredit,
   type OnChainPool, stroopsToUsdc,
 } from "@/lib/soroban";
 import { createPool, joinPool, withdrawFromPool } from "@/lib/contracts";
@@ -84,12 +84,15 @@ export default function SavingsPage() {
     setJoinTarget(pool);
 
     try {
-      const hasPriorHistory =
-        groups.some(g => g.members.includes(address)) ||
-        pools.some(p => p.id !== pool.id && p.members.includes(address));
+      // Only rotating savings groups carry default risk — check ZK credit for those.
+      // Target pool history alone doesn't require a proof.
+      const priorGroups = groups.filter(g => g.members.includes(address));
 
-      if (hasPriorHistory) {
-        const hasProof = await hasZkProofOnChain(address);
+      if (priorGroups.length > 0) {
+        let hasProof = false;
+        for (const pg of priorGroups) {
+          if (await checkCredit(address, pg.id, 1)) { hasProof = true; break; }
+        }
         if (!hasProof) {
           setZkBlocked(true);
           setZkChecking(false);

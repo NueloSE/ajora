@@ -24,7 +24,7 @@ import {
   xdr,
 } from "@stellar/stellar-sdk";
 
-import { rpc, ROTATING_ID, TARGET_ID, REPUTATION_ID } from "./soroban";
+import { rpc, ROTATING_ID, TARGET_ID, REPUTATION_ID, ZK_ID } from "./soroban";
 import { getSession, primePasskeyKit } from "./passkey";
 
 const NETWORK   = process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE ?? Networks.TESTNET;
@@ -239,6 +239,39 @@ export async function transferUsdc(
 
 // ---------------------------------------------------------------------------
 // Reputation
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// ZK verifier
+// ---------------------------------------------------------------------------
+
+/**
+ * Submit a ZK credit proof result to the on-chain verifier.
+ * Requires the member's passkey signature (triggers biometric prompt).
+ *
+ * `commitmentHex` — 64-char hex string (32 bytes = the pedersen hash)
+ * `verified`      — true if the proof verified, false for a defaulter
+ */
+export async function submitVerifiedProof(
+  member:         string,
+  groupId:        number,
+  commitmentHex:  string,   // 64-char hex (no 0x prefix)
+  cyclesClaimed:  number,
+  verified:       boolean,
+): Promise<string> {
+  const commitBytes = Buffer.from(commitmentHex, "hex");
+  if (commitBytes.length !== 32) {
+    throw new Error("Commitment must be exactly 32 bytes");
+  }
+  return buildAndSubmit(ZK_ID, "submit_verified_proof", [
+    addressArg(member),
+    nativeToScVal(groupId,      { type: "u32" }),
+    xdr.ScVal.scvBytes(commitBytes),      // BytesN<32>
+    nativeToScVal(cyclesClaimed, { type: "u32" }),
+    xdr.ScVal.scvBool(verified),
+  ]);
+}
+
 // ---------------------------------------------------------------------------
 
 /**
