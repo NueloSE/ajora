@@ -17,13 +17,17 @@ import {
 } from "@stellar/stellar-sdk";
 import { AgentObservation, SavingsGroup, MemberContribution } from "./types.js";
 
-const RPC_URL   = process.env.STELLAR_RPC_URL   ?? "https://soroban-testnet.stellar.org";
-const NETWORK   = process.env.STELLAR_NETWORK   ?? Networks.TESTNET;
-const AGENT_KEY = process.env.AGENT_SECRET_KEY  ?? "";   // funded testnet keypair
+const RPC_URL   = process.env.STELLAR_RPC_URL      ?? "https://soroban-testnet.stellar.org";
+const NETWORK   = process.env.NETWORK_PASSPHRASE   ?? Networks.TESTNET;
+const AGENT_KEY = process.env.AGENT_SECRET_KEY     ?? "";   // only needed for writes
 
-const ROTATING_CONTRACT_ID  = process.env.ROTATING_SAVINGS_CONTRACT_ID ?? "";
-const TARGET_CONTRACT_ID    = process.env.TARGET_SAVINGS_CONTRACT_ID   ?? "";
-const REPUTATION_CONTRACT_ID = process.env.REPUTATION_CONTRACT_ID      ?? "";
+const ROTATING_CONTRACT_ID   = process.env.ROTATING_CONTRACT_ID   ?? "";
+const TARGET_CONTRACT_ID     = process.env.TARGET_CONTRACT_ID     ?? "";
+const REPUTATION_CONTRACT_ID = process.env.REPUTATION_CONTRACT_ID ?? "";
+
+// Funded testnet account used as source for read-only simulations.
+// No secret key needed — this account just needs to exist on testnet.
+const SIM_ACCOUNT = "GC3BYGUYPLUFX3PGUQ4SWWPHLAGRNTJ7F35KWFKXNVKVUUAMNOP5SU6Y";
 
 const LEDGERS_PER_HOUR = 720; // ~5 s/ledger on Stellar
 
@@ -43,11 +47,10 @@ async function readContract(
   method: string,
   args: xdr.ScVal[] = [],
 ): Promise<unknown> {
-  if (!contractId || !AGENT_KEY) return null;
+  if (!contractId) return null;
 
   const contract = new Contract(contractId);
-  const keypair  = Keypair.fromSecret(AGENT_KEY);
-  const account  = await rpc.getAccount(keypair.publicKey()).catch(() => null);
+  const account  = await rpc.getAccount(SIM_ACCOUNT).catch(() => null);
   if (!account) return null;
 
   const tx = new TransactionBuilder(account, {
