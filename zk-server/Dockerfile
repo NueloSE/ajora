@@ -12,8 +12,10 @@ RUN apt-get update && apt-get install -y \
 RUN curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
 RUN /root/.nargo/bin/noirup --version 1.0.0-beta.9
 
-# Install bb 0.87.1 (Barretenberg proving backend — must match nargo version)
-RUN curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/master/barretenberg/cpp/installation/install | bash -s -- 0.87.1
+# Install bbup (the bb version manager) then use it to install bb 0.87.1
+RUN curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/master/barretenberg/cpp/installation/install | bash
+ENV PATH="/root/.bb/bin:$PATH"
+RUN bbup --version 0.87.1
 
 ENV PATH="/root/.nargo/bin:/root/.bb/bin:$PATH"
 
