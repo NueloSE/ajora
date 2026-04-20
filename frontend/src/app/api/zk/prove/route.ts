@@ -76,15 +76,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const defaultCount    = await getDefaultCount(walletAddress);
-    const onChainCycles   = await getGroupCycleCount(groupId);
-    const cyclesCompleted = defaultCount === 0 && onChainCycles >= 1 ? onChainCycles : 0;
+    const [unpaidDebts, onChainCycles] = await Promise.all([
+      getUnpaidDebtCount(walletAddress),
+      getGroupCycleCount(groupId),
+    ]);
+    const cyclesCompleted = unpaidDebts === 0 && onChainCycles >= 1 ? onChainCycles : 0;
 
     if (cyclesCompleted === 0) {
       return NextResponse.json({
         verified:        false,
-        reason:          defaultCount > 0
-          ? `Cannot generate proof: ${defaultCount} default(s) on record. Repay your debts first.`
+        reason:          unpaidDebts > 0
+          ? `Cannot generate proof: ${unpaidDebts} unpaid debt(s) on record. Repay your debts first.`
           : "Cannot generate proof: no completed cycles in this group yet.",
         cyclesCompleted: 0,
         commitment:      null,
@@ -138,12 +140,13 @@ async function readContract(
   return retval ? scValToNative(retval) : null;
 }
 
-async function getDefaultCount(address: string): Promise<number> {
+async function getUnpaidDebtCount(address: string): Promise<number> {
   if (!REPUTATION_ID) return 0;
-  const result = await readContract(REPUTATION_ID, "get_default_count", [
+  const result = await readContract(REPUTATION_ID, "get_debts", [
     nativeToScVal(address, { type: "address" }),
   ]);
-  return Number(result ?? 0);
+  if (!Array.isArray(result)) return 0;
+  return (result as Record<string, unknown>[]).filter(d => !d.paid).length;
 }
 
 async function getGroupCycleCount(groupId: number): Promise<number> {
