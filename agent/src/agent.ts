@@ -146,9 +146,41 @@ async function buildObservationMessage(obs: AgentObservation): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
+// Quick check — is there anything that actually needs Claude's attention?
+// Returns true if at least one group has an urgent condition.
+// ---------------------------------------------------------------------------
+const LEDGERS_48H  = 48 * LEDGERS_PER_HOUR;  // 34,560 ledgers
+
+function needsAttention(observation: AgentObservation): boolean {
+  for (const group of observation.groups) {
+    // Forming groups always worth alerting
+    if (group.status === "forming") return true;
+
+    const ledgersLeft = observation.deadlinesInLedgers[group.id] ?? Infinity;
+    const groupContribs = observation.contributions.filter(c => c.groupId === group.id);
+    const allContributed = groupContribs.length > 0 && groupContribs.every(c => c.contributed);
+    const anyMissed = groupContribs.some(c => !c.contributed);
+
+    // Deadline within 48h with missing contributions
+    if (anyMissed && ledgersLeft < LEDGERS_48H) return true;
+    // Deadline passed with missing contributions (default territory)
+    if (anyMissed && ledgersLeft < 0) return true;
+    // All contributed — close_cycle needed
+    if (allContributed) return true;
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
 // Run one agent poll cycle
 // ---------------------------------------------------------------------------
 export async function runAgentCycle(observation: AgentObservation): Promise<void> {
+  // Skip Claude entirely if nothing needs attention — saves API cost
+  if (!needsAttention(observation)) {
+    console.log("\n[agent] Ledger", observation.currentLedger, "— nothing urgent, skipping Claude.");
+    return;
+  }
+
   const userMessage = await buildObservationMessage(observation);
 
   console.log("\n[agent] Starting cycle at ledger", observation.currentLedger);
@@ -166,7 +198,7 @@ export async function runAgentCycle(observation: AgentObservation): Promise<void
     iteration++;
 
     const response = await client.messages.create({
-      model: "claude-sonnet-4-6",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 4096,
       system: SYSTEM_PROMPT,
       tools: AGENT_TOOLS,

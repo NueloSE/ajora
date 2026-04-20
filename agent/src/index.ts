@@ -15,7 +15,7 @@ async function main() {
   console.log("╚══════════════════════════════════════╝");
   console.log(`Mode:     ${USE_MOCK ? "mock data" : "live Stellar testnet"}`);
   console.log(`Interval: ${POLL_INTERVAL_MS / 1000}s`);
-  console.log(`Model:    claude-sonnet-4-6\n`);
+  console.log(`Model:    claude-haiku-4-5-20251001 (skips Claude when nothing is urgent)\n`);
 
   if (!process.env.ANTHROPIC_API_KEY) {
     console.error("ERROR: ANTHROPIC_API_KEY is not set in .env");
