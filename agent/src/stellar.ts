@@ -285,9 +285,8 @@ async function invokeContract(
   method: string,
   args: xdr.ScVal[],
 ): Promise<string> {
-  if (!contractId || !AGENT_KEY) {
-    throw new Error("Contract ID or agent key not configured");
-  }
+  if (!contractId) throw new Error("Contract ID not configured");
+  if (!AGENT_KEY)  throw new Error("AGENT_SECRET_KEY is not set in environment — cannot sign write transactions");
 
   const keypair  = Keypair.fromSecret(AGENT_KEY);
   const account  = await rpc.getAccount(keypair.publicKey());
@@ -332,8 +331,10 @@ async function invokeContract(
  * Call close_cycle on the rotating savings contract.
  */
 export async function closeCycle(groupId: number): Promise<string> {
+  if (!AGENT_KEY) throw new Error("AGENT_SECRET_KEY is not set in environment");
+  const callerArg = nativeToScVal(Keypair.fromSecret(AGENT_KEY).publicKey(), { type: "address" });
   return invokeContract(ROTATING_CONTRACT_ID, "close_cycle", [
-    nativeToScVal(Keypair.fromSecret(AGENT_KEY).publicKey(), { type: "address" }),
+    callerArg,
     xdr.ScVal.scvU32(groupId),
   ]);
 }
@@ -346,12 +347,13 @@ export async function flagDefault(
   groupId: number,
   member: string,
 ): Promise<string> {
+  if (!AGENT_KEY) throw new Error("AGENT_SECRET_KEY is not set in environment");
   const contractId = contractType === "rotating"
     ? ROTATING_CONTRACT_ID
     : TARGET_CONTRACT_ID;
-
+  const callerArg = nativeToScVal(Keypair.fromSecret(AGENT_KEY).publicKey(), { type: "address" });
   return invokeContract(contractId, "flag_default", [
-    nativeToScVal(Keypair.fromSecret(AGENT_KEY).publicKey(), { type: "address" }),
+    callerArg,
     xdr.ScVal.scvU32(groupId),
     nativeToScVal(member, { type: "address" }),
   ]);
