@@ -9,6 +9,7 @@ import {
   type OnChainPool, stroopsToUsdc,
 } from "@/lib/soroban";
 import { createPool, joinPool, withdrawFromPool } from "@/lib/contracts";
+import { friendlyError } from "@/lib/errors";
 import { useWallet } from "@/context/WalletContext";
 
 const STELLAR_EXPLORER = "https://stellar.expert/explorer/testnet/tx";
@@ -134,7 +135,7 @@ export default function SavingsPage() {
       setShowCreate(false);
       await loadData();
     } catch (e) {
-      setTxError(e instanceof Error ? e.message : String(e));
+      setTxError(friendlyError(e instanceof Error ? e.message : String(e), "pool"));
     } finally {
       setSubmitting(false);
     }
@@ -150,7 +151,7 @@ export default function SavingsPage() {
       setJoinTarget(null);
       await loadData();
     } catch (e) {
-      setTxError(e instanceof Error ? e.message : String(e));
+      setTxError(friendlyError(e instanceof Error ? e.message : String(e), "pool"));
     }
   }
 
@@ -163,7 +164,7 @@ export default function SavingsPage() {
       setTxHash(hash);
       await loadData();
     } catch (e) {
-      setTxError(e instanceof Error ? e.message : String(e));
+      setTxError(friendlyError(e instanceof Error ? e.message : String(e), "pool"));
     }
   }
 

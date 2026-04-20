@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { fetchAllGroups, fetchUsdcBalance, checkCredit, type OnChainGroup, stroopsToUsdc, REPUTATION_ID } from "@/lib/soroban";
 import { createGroup, joinGroup, contribute } from "@/lib/contracts";
+import { friendlyError } from "@/lib/errors";
 import { useWallet } from "@/context/WalletContext";
 import { saveGroupName as saveGroupNameRemote, fetchGroupNames } from "@/lib/registry";
 
@@ -156,7 +157,7 @@ export default function GroupsPage() {
         // Non-fatal — creator may already be a member or group may not support it
       }
     } catch (e) {
-      setTxError(e instanceof Error ? e.message : String(e));
+      setTxError(friendlyError(e instanceof Error ? e.message : String(e), "group"));
     } finally {
       setSubmitting(false);
     }
@@ -210,15 +211,7 @@ export default function GroupsPage() {
       setJoinTarget(null);
       await loadGroups();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      // Map on-chain error codes to human-readable messages
-      if (msg.includes("14") || msg.toLowerCase().includes("reputation")) {
-        setTxError("Reputation check failed — your score is too low or you have unpaid debts. Check your reputation on the dashboard.");
-      } else if (msg.toLowerCase().includes("locked")) {
-        setTxError("Your account is locked due to repeated defaults. Check your reputation on the dashboard for the unlock date.");
-      } else {
-        setTxError(msg);
-      }
+      setTxError(friendlyError(e instanceof Error ? e.message : String(e), "group"));
     }
   }
 
@@ -253,7 +246,7 @@ export default function GroupsPage() {
       }
       await loadGroups();
     } catch (e) {
-      setTxError(e instanceof Error ? e.message : String(e));
+      setTxError(friendlyError(e instanceof Error ? e.message : String(e), "group"));
     }
   }
 
