@@ -151,10 +151,31 @@ async function buildObservationMessage(obs: AgentObservation): Promise<string> {
 // ---------------------------------------------------------------------------
 const LEDGERS_48H  = 48 * LEDGERS_PER_HOUR;  // 34,560 ledgers
 
+// Cooldown tracker for forming-group alerts — prevents calling Claude every
+// poll just to repeat the same "group is forming" announcement.
+// Key: group ID, Value: timestamp of last alert_forming_group call.
+const formingGroupLastAlerted = new Map<number, number>();
+const FORMING_ALERT_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour between alerts
+
 function needsAttention(observation: AgentObservation): boolean {
   for (const group of observation.groups) {
-    // Forming groups always worth alerting
-    if (group.status === "forming") return true;
+    // Skip terminal groups entirely — they can never need action again
+    if (group.status === "completed") continue;
+
+    if (group.status === "forming") {
+      // Only alert forming groups that actually need more members
+      const hasOpenSlots = group.members.length < group.maxMembers;
+      if (!hasOpenSlots) continue; // full but not yet activated — nothing to do
+
+      // Enforce cooldown so we don't call Claude every 2 minutes forever
+      const lastAlerted = formingGroupLastAlerted.get(group.id) ?? 0;
+      const cooldownElapsed = Date.now() - lastAlerted > FORMING_ALERT_COOLDOWN_MS;
+      if (cooldownElapsed) {
+        formingGroupLastAlerted.set(group.id, Date.now());
+        return true;
+      }
+      continue; // still within cooldown window — skip
+    }
 
     const ledgersLeft = observation.deadlinesInLedgers[group.id] ?? Infinity;
     const groupContribs = observation.contributions.filter(c => c.groupId === group.id);
@@ -181,7 +202,14 @@ export async function runAgentCycle(observation: AgentObservation): Promise<void
     return;
   }
 
-  const userMessage = await buildObservationMessage(observation);
+  // Strip completed groups before sending to Claude — they're terminal and
+  // waste input tokens describing groups that can never need action again.
+  const activeObservation: AgentObservation = {
+    ...observation,
+    groups: observation.groups.filter(g => g.status !== "completed"),
+  };
+
+  const userMessage = await buildObservationMessage(activeObservation);
 
   console.log("\n[agent] Starting cycle at ledger", observation.currentLedger);
   console.log("[agent] Observation:\n" + userMessage);
